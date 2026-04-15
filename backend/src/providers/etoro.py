@@ -82,7 +82,9 @@ def _all_instrument_names() -> dict:
         first_body = first_resp.json()
         first_items = first_body.get("items", [])
         total = first_body.get("totalItems", 0)
-        total_pages = max(1, -(-total // 500))  # ceiling division
+        # API ignores pageSize and may return fewer than requested — detect actual page size
+        actual_page_size = max(len(first_items), 1) if first_items else 20
+        total_pages = max(1, -(-total // actual_page_size))  # ceiling division
 
         all_items: list = list(first_items)
 

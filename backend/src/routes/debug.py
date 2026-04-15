@@ -144,6 +144,35 @@ def etoro_positions_raw():
     return positions[:3]
 
 
+@router.get("/etoro-search-raw")
+def etoro_search_raw():
+    """Show raw eToro search API response to see exact field names used for instrument names."""
+    import os, uuid, requests
+    ETORO_BASE_URL = "https://public-api.etoro.com"
+    headers = {
+        "x-request-id": str(uuid.uuid4()),
+        "x-api-key": os.getenv("ETORO_USER_KEY", "") or os.getenv("ETORO_USERNAME", ""),
+        "x-user-key": os.getenv("ETORO_API_KEY", ""),
+    }
+    try:
+        r = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/market-data/search",
+            params={"text": "", "page": 1, "pageSize": 500},
+            headers=headers, timeout=30
+        )
+        r.raise_for_status()
+        body = r.json()
+        items = body.get("items", [])
+        return {
+            "totalItems": body.get("totalItems"),
+            "items_returned": len(items),
+            "first_item_all_keys": items[0] if items else {},
+            "first_3_items": items[:3],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/etoro-positions-raw-api")
 def etoro_positions_raw_api():
     """Show RAW eToro API position objects (before normalization) to inspect field names."""
