@@ -43,12 +43,31 @@ export default function TotalValuePanel({ accounts, total }) {
   ) ?? 0;
   const investedTotal = (total ?? 0) - cashTotal;
 
-  const wrapperTotals = WRAPPER_GROUPS.map(g => ({
-    ...g,
-    value: (accounts ?? [])
-      .filter(a => g.subtypes.includes(a.account_subtype))
-      .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
-  })).filter(g => g.value > 0);
+  // GIA unrealised gains (computed first, used in wrapperTotals and CGT tracker)
+  const giaHoldings = (accounts ?? [])
+    .filter(a => a.account_subtype === 'gia')
+    .flatMap(a => a.holdings ?? [])
+    .filter(h => h.gain_loss_gbp != null);
+  const giaGains = giaHoldings.filter(h => h.gain_loss_gbp > 0).reduce((s, h) => s + h.gain_loss_gbp, 0);
+  const giaLosses = giaHoldings.filter(h => h.gain_loss_gbp < 0).reduce((s, h) => s + Math.abs(h.gain_loss_gbp), 0);
+  const giaNetGains = giaGains - giaLosses;
+  const showCGT = giaHoldings.length > 0;
+  const giaTotalValue = (accounts ?? []).filter(a => a.account_subtype === 'gia').reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+
+  const wrapperTotals = WRAPPER_GROUPS.map(g => {
+    // For GIA (Taxable): show unrealised gains if available, otherwise total value
+    if (g.subtypes.includes('gia')) {
+      const value = showCGT ? giaNetGains : giaTotalValue;
+      const label = showCGT ? 'Gains (GIA)' : 'Taxable';
+      return { ...g, label, value };
+    }
+    return {
+      ...g,
+      value: (accounts ?? [])
+        .filter(a => g.subtypes.includes(a.account_subtype))
+        .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
+    };
+  }).filter(g => g.value !== 0 && (g.subtypes.includes('gia') ? giaTotalValue > 0 : g.value > 0));
 
   // Allowance trackers — use current-tax-year contributions only
   function contribForSubtypes(subtypes) {
@@ -70,16 +89,6 @@ export default function TotalValuePanel({ accounts, total }) {
   const LISA_LIMIT = 4000;
   const PENSION_LIMIT = 60000;
   const CGT_EXEMPT = 3000;
-
-  const giaHoldings = (accounts ?? [])
-    .filter(a => a.account_subtype === 'gia')
-    .flatMap(a => a.holdings ?? [])
-    .filter(h => h.gain_loss_gbp != null);
-
-  const giaGains = giaHoldings.filter(h => h.gain_loss_gbp > 0).reduce((s, h) => s + h.gain_loss_gbp, 0);
-  const giaLosses = giaHoldings.filter(h => h.gain_loss_gbp < 0).reduce((s, h) => s + Math.abs(h.gain_loss_gbp), 0);
-  const giaNetGains = giaGains - giaLosses;
-  const showCGT = giaHoldings.length > 0;
 
   const allowances = [
     { label: 'ISA', contributed: isaContributed, limit: ISA_LIMIT, colour: 'bg-emerald-500' },
