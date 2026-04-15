@@ -10,6 +10,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
   const [unitCount, setUnitCount] = useState('0');
   const [currency, setCurrency] = useState('GBP');
   const [manualPrice, setManualPrice] = useState('');
+  const [avgCost, setAvgCost] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -30,6 +31,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
       };
       if (displayName.trim()) body.display_name = displayName.trim();
       if (manualPrice.trim()) body.manual_price_gbp = parseFloat(manualPrice);
+      if (avgCost.trim()) body.avg_cost_gbp = parseFloat(avgCost);
       const res = await fetch(`${API_URL}/api/holdings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,6 +126,21 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
               step="0.01"
               min="0"
               placeholder="Use for funds without a market ticker (ISIN/SEDOL only)"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+              Avg Cost per Unit (£) <span className="text-slate-600">(optional — for gain/loss tracking)</span>
+            </label>
+            <input
+              type="number"
+              value={avgCost}
+              onChange={e => setAvgCost(e.target.value)}
+              step="0.0001"
+              min="0"
+              placeholder="Your average purchase price in GBP"
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
             />
           </div>

@@ -41,6 +41,13 @@ def holding_with_price_from_row(row: dict) -> HoldingWithPrice:
             except Exception:
                 pass
     freshness = get_freshness(row["last_holding_update"])
+    avg_cost_gbp = float(row["avg_cost_gbp"]) if row.get("avg_cost_gbp") else None
+    gain_loss_gbp = None
+    gain_loss_pct = None
+    if avg_cost_gbp and price_gbp and unit_count > 0:
+        cost_basis = avg_cost_gbp * unit_count
+        gain_loss_gbp = (price_gbp - avg_cost_gbp) * unit_count
+        gain_loss_pct = (gain_loss_gbp / cost_basis) * 100 if cost_basis else None
     return HoldingWithPrice(
         id=row["id"],
         account_id=row["account_id"],
@@ -50,6 +57,9 @@ def holding_with_price_from_row(row: dict) -> HoldingWithPrice:
         currency=row.get("currency", "GBP"),
         price_gbp=price_gbp,
         value_gbp=value_gbp,
+        avg_cost_gbp=avg_cost_gbp,
+        gain_loss_gbp=gain_loss_gbp,
+        gain_loss_pct=gain_loss_pct,
         last_holding_update=row["last_holding_update"],
         freshness=freshness,
     )

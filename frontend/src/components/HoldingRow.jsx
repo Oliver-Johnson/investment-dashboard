@@ -61,6 +61,20 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
           {formatGBP(value)}
         </span>
       </td>
+      <td className="py-2.5 px-4 text-right">
+        {holding.gain_loss_gbp != null ? (
+          <div className={`font-mono text-xs ${holding.gain_loss_gbp >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div>{holding.gain_loss_gbp >= 0 ? '+' : ''}{formatGBP(holding.gain_loss_gbp)}</div>
+            {holding.gain_loss_pct != null && (
+              <div className="text-xs opacity-75">
+                {holding.gain_loss_pct >= 0 ? '+' : ''}{holding.gain_loss_pct.toFixed(1)}%
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-slate-700 text-xs">—</span>
+        )}
+      </td>
       <td className="py-2.5 pr-3 text-right w-16">
         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
           {isManual && (

@@ -50,9 +50,11 @@ def init_schema():
                     currency VARCHAR(3) DEFAULT 'GBP',
                     last_holding_update TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     notes TEXT,
-                    manual_price_gbp NUMERIC(20, 6)
+                    manual_price_gbp NUMERIC(20, 6),
+                    avg_cost_gbp NUMERIC(20, 6)
                 );
                 ALTER TABLE holdings ADD COLUMN IF NOT EXISTS manual_price_gbp NUMERIC(20, 6);
+                ALTER TABLE holdings ADD COLUMN IF NOT EXISTS avg_cost_gbp NUMERIC(20, 6);
 
                 CREATE TABLE IF NOT EXISTS price_cache (
                     ticker VARCHAR(20) PRIMARY KEY,

@@ -34,6 +34,11 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
     0
   ) ?? 0;
 
+  const totalGainLoss = account.holdings?.reduce((sum, h) => {
+    return h.gain_loss_gbp != null ? sum + h.gain_loss_gbp : sum;
+  }, null);
+  const hasGainLoss = totalGainLoss !== null;
+
   async function handleSaveCash() {
     const val = parseFloat(cashInput);
     await fetch(`${API_URL}/api/accounts/${account.id}`, {
@@ -106,6 +111,11 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                 <div className="text-xl font-bold font-mono" style={{ color: colour }}>
                   {formatGBP(total)}
                 </div>
+                {hasGainLoss && (
+                  <div className={`text-xs font-mono mt-0.5 ${totalGainLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {totalGainLoss >= 0 ? '+' : ''}{formatGBP(totalGainLoss)}
+                  </div>
+                )}
                 <div className="text-xs text-slate-500 mt-0.5">
                   {account.holdings?.length ?? 0} holding{account.holdings?.length !== 1 ? 's' : ''}
                 </div>
@@ -150,6 +160,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                       <th className="pb-2 px-4 text-right font-medium">Units</th>
                       <th className="pb-2 px-4 text-right font-medium">Price</th>
                       <th className="pb-2 pl-4 pr-3 text-right font-medium">Value</th>
+                      <th className="pb-2 px-4 text-right font-medium">Gain/Loss</th>
                       <th className="pb-2 pr-3 w-16" />
                     </tr>
                   </thead>

@@ -37,7 +37,7 @@ def export_csv():
 
     writer.writerow([
         'Account', 'Wrapper', 'Tax Status', 'Ticker', 'Name',
-        'Units', 'Price (£)', 'Value (£)',
+        'Units', 'Price (£)', 'Value (£)', 'Avg Cost (£)', 'Gain/Loss (£)', 'Gain/Loss %',
     ])
 
     for account in summary.accounts:
@@ -55,6 +55,9 @@ def export_csv():
                 f"{h.unit_count:.4f}" if h.unit_count else '',
                 f"{h.price_gbp:.4f}" if h.price_gbp else '',
                 f"{h.value_gbp:.2f}" if h.value_gbp else '',
+                f"{h.avg_cost_gbp:.4f}" if h.avg_cost_gbp else '',
+                f"{h.gain_loss_gbp:.2f}" if h.gain_loss_gbp is not None else '',
+                f"{h.gain_loss_pct:.2f}" if h.gain_loss_pct is not None else '',
             ])
 
     output.seek(0)
