@@ -1,4 +1,4 @@
-import time
+import re
 import yfinance as yf
 from datetime import datetime, timedelta
 from src.db import get_db
@@ -43,14 +43,32 @@ def get_price_gbp(ticker: str) -> float:
             return price
 
 
+def _is_isin(ticker: str) -> bool:
+    return bool(re.match(r'^[A-Z]{2}[A-Z0-9]{10}$', ticker))
+
+
 def _fetch_price_gbp(ticker: str) -> float:
     info = yf.Ticker(ticker).fast_info
     price = info["lastPrice"]
+    currency = info.get("currency", "")
 
-    if ticker.endswith(".L"):
-        # London Stock Exchange prices are in pence — convert to pounds
+    # Use actual currency field — most reliable
+    if currency == "GBp":
+        # yfinance returns pence for some LSE instruments
         return price / 100.0
+    if currency == "GBP":
+        return price
+    if currency == "USD":
+        gbpusd = _get_gbpusd_rate()
+        return price / gbpusd
 
-    # US ticker — convert USD to GBP
+    # Fallback heuristics if currency field missing
+    if _is_isin(ticker):
+        # ISINs tested as returning GBP for UK-registered funds
+        return price
+    if ticker.endswith(".L"):
+        return price  # yfinance .L prices are in GBP, not pence
+
+    # Default: assume USD and convert
     gbpusd = _get_gbpusd_rate()
     return price / gbpusd
