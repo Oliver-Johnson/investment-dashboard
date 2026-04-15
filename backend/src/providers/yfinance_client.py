@@ -12,7 +12,26 @@ def _get_gbpusd_rate() -> float:
     cached = _gbpusd_cache.get("rate")
     if cached and (now - cached["fetched"]).total_seconds() < 60:
         return cached["value"]
-    rate = yf.Ticker("GBPUSD=X").fast_info["lastPrice"]
+
+    rate = None
+    # fast_info can throw '_dividends' AttributeError on some yfinance versions
+    try:
+        rate = yf.Ticker("GBPUSD=X").fast_info["lastPrice"]
+    except Exception:
+        pass
+
+    if not rate:
+        try:
+            hist = yf.Ticker("GBPUSD=X").history(period="1d")
+            if not hist.empty:
+                rate = float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
+
+    if not rate:
+        # Last resort: use stale cache if available, else a reasonable default
+        rate = (cached["value"] if cached else 1.27)
+
     _gbpusd_cache["rate"] = {"value": rate, "fetched": now}
     return rate
 
