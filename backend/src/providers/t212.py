@@ -39,7 +39,11 @@ def fetch_portfolio() -> list[dict]:
         quantity = Decimal(str(pos.get("quantity", 0)))
         avg_price = Decimal(str(pos.get("averagePrice", 0)))
         current_price = Decimal(str(pos.get("currentPrice", 0)))
-        currency = pos.get("currency", "GBP")
+        # T212 may not include currency per position; derive from ticker
+        currency = pos.get("currency")
+        if not currency:
+            currency = "USD" if "_US_" in ticker else "GBP"
+        ppl_gbp = pos.get("ppl")  # profit/loss in account currency (GBP)
         market_value = quantity * current_price
 
         if currency == "USD":
@@ -51,12 +55,15 @@ def fetch_portfolio() -> list[dict]:
             market_value_gbp = market_value
             current_price_gbp = current_price
 
-        results.append({
+        result = {
             "ticker": ticker,
             "quantity": quantity,
             "avg_price": avg_price,
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
-        })
+        }
+        if ppl_gbp is not None:
+            result["ppl_gbp"] = Decimal(str(ppl_gbp))
+        results.append(result)
 
     return results

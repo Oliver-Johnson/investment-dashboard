@@ -24,7 +24,7 @@ def fetch_portfolio() -> list[dict]:
     public/partner REST API pattern — adjust field names if needed.
     """
     if not ETORO_API_KEY or not ETORO_USERNAME:
-        return []
+        raise RuntimeError("eToro API credentials not configured (ETORO_API_KEY, ETORO_USERNAME)")
 
     # TODO: confirm this path is correct for your eToro API tier
     url = f"{ETORO_BASE_URL}/user/v1/users/{ETORO_USERNAME}/portfolio"

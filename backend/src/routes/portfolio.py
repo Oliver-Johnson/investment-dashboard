@@ -108,8 +108,20 @@ def portfolio_summary():
                     etoro_tickers: set[str] = set()
                     try:
                         etoro_positions = etoro.fetch_portfolio()
-                    except Exception:
+                    except Exception as e:
                         etoro_positions = []
+                        holdings_out.append(HoldingWithPrice(
+                            id=0,
+                            account_id=account_id,
+                            ticker="ERROR",
+                            display_name=f"eToro fetch failed: {e}",
+                            unit_count=0,
+                            currency="GBP",
+                            price_gbp=None,
+                            value_gbp=None,
+                            last_holding_update=now,
+                            freshness="red",
+                        ))
 
                     for pos in etoro_positions:
                         etoro_tickers.add(pos["ticker"])

@@ -83,6 +83,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleAdd()}
               />
+              <p className="text-xs text-gray-500 mt-1">Use yfinance format: FCIT.L for LSE stocks, AAPL for US stocks. Avoid ISIN/SEDOL codes.</p>
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1.5 font-medium">Currency</label>
