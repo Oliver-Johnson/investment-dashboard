@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from src.db import get_db
 from src.models import AccountSummary, HoldingWithPrice, PortfolioSummary
-from src.providers import t212
+from src.providers import t212, etoro
 from src.providers.yfinance_client import get_price_gbp
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -103,16 +103,44 @@ def portfolio_summary():
                         if row["ticker"] not in t212_tickers:
                             holdings_out.append(holding_with_price_from_row(row))
 
+                elif account_type == "etoro":
+                    # Get live positions from eToro API
+                    etoro_tickers: set[str] = set()
+                    try:
+                        etoro_positions = etoro.fetch_portfolio()
+                    except Exception:
+                        etoro_positions = []
+
+                    for pos in etoro_positions:
+                        etoro_tickers.add(pos["ticker"])
+                        holdings_out.append(HoldingWithPrice(
+                            id=0,  # eToro positions don't have a DB id
+                            account_id=account_id,
+                            ticker=pos["ticker"],
+                            display_name=pos.get("display_name"),
+                            unit_count=float(pos.get("quantity", 0)),
+                            currency=pos.get("currency", "USD"),
+                            price_gbp=float(pos["current_price_gbp"]) if pos.get("current_price_gbp") else None,
+                            value_gbp=float(pos["market_value_gbp"]) if pos.get("market_value_gbp") else None,
+                            last_holding_update=now,
+                            freshness="green",
+                        ))
+
+                    # Also include any DB holdings not covered by eToro (manual additions)
+                    for row in db_holdings:
+                        if row["ticker"] not in etoro_tickers:
+                            holdings_out.append(holding_with_price_from_row(row))
+
                 else:
-                    # manual / etoro: use DB holdings + yfinance prices
+                    # manual: use DB holdings + yfinance prices
                     for row in db_holdings:
                         holdings_out.append(holding_with_price_from_row(row))
 
                 account_total = sum(h.value_gbp or 0.0 for h in holdings_out)
                 total_value += account_total
 
-                # Freshness only meaningful for manual/etoro accounts
-                freshness_vals = [h.freshness for h in holdings_out] if account_type != "t212" else []
+                # Freshness only meaningful for manual accounts (API accounts are always live)
+                freshness_vals = [h.freshness for h in holdings_out] if account_type == "manual" else []
                 account_freshness = worst_freshness(freshness_vals) if freshness_vals else None
 
                 last_updated = now
