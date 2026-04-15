@@ -69,6 +69,17 @@ export default function TotalValuePanel({ accounts, total }) {
   const ISA_LIMIT = 20000;
   const LISA_LIMIT = 4000;
   const PENSION_LIMIT = 60000;
+  const CGT_EXEMPT = 3000;
+
+  const giaHoldings = (accounts ?? [])
+    .filter(a => a.account_subtype === 'gia')
+    .flatMap(a => a.holdings ?? [])
+    .filter(h => h.gain_loss_gbp != null);
+
+  const giaGains = giaHoldings.filter(h => h.gain_loss_gbp > 0).reduce((s, h) => s + h.gain_loss_gbp, 0);
+  const giaLosses = giaHoldings.filter(h => h.gain_loss_gbp < 0).reduce((s, h) => s + Math.abs(h.gain_loss_gbp), 0);
+  const giaNetGains = giaGains - giaLosses;
+  const showCGT = giaHoldings.length > 0;
 
   const allowances = [
     { label: 'ISA', contributed: isaContributed, limit: ISA_LIMIT, colour: 'bg-emerald-500' },
@@ -139,6 +150,28 @@ export default function TotalValuePanel({ accounts, total }) {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {showCGT && (
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <div className="text-xs text-slate-500 font-medium uppercase tracking-widest mb-3">CGT (GIA)</div>
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-400 font-medium">Unrealised Gains (GIA)</span>
+                  <span className={`font-mono font-medium ${giaNetGains >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {giaNetGains >= 0 ? '' : '-'}{formatGBP(Math.abs(giaNetGains))}
+                    <span className="text-slate-600"> / {formatGBP(CGT_EXEMPT)}</span>
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${giaNetGains > CGT_EXEMPT ? 'bg-red-500' : 'bg-amber-500'}`}
+                    style={{ width: `${Math.min(100, Math.max(0, (giaNetGains / CGT_EXEMPT) * 100))}%` }}
+                  />
+                </div>
+                <div className="text-xs text-slate-600 mt-1">£3,000 annual CGT exempt amount · 18%/24% on gains above</div>
               </div>
             </div>
           )}
