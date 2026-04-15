@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
 import AllocationChart from './AllocationChart';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -23,6 +26,15 @@ const WRAPPER_GROUPS = [
 ];
 
 export default function TotalValuePanel({ accounts, total }) {
+  const [contribSummary, setContribSummary] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/contributions/summary`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setContribSummary(d); })
+      .catch(() => {});
+  }, []);
+
   const accountCount = accounts?.length ?? 0;
   const holdingCount = accounts?.reduce((s, a) => s + (a.holdings?.length ?? 0), 0) ?? 0;
 
@@ -38,16 +50,21 @@ export default function TotalValuePanel({ accounts, total }) {
       .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
   })).filter(g => g.value > 0);
 
-  // Allowance trackers (tax year limits)
-  const isaContributed = (accounts ?? [])
-    .filter(a => ['isa', 'cash_isa', 'lisa'].includes(a.account_subtype))
-    .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
-  const lisaContributed = (accounts ?? [])
-    .filter(a => a.account_subtype === 'lisa')
-    .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
-  const pensionContributed = (accounts ?? [])
-    .filter(a => a.account_subtype === 'sipp')
-    .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+  // Allowance trackers — use actual current-tax-year contributions if available
+  function contribForSubtypes(subtypes) {
+    if (!contribSummary) return null;
+    const ids = new Set((accounts ?? []).filter(a => subtypes.includes(a.account_subtype)).map(a => a.id));
+    return (contribSummary.by_account ?? [])
+      .filter(b => ids.has(b.account_id))
+      .reduce((s, b) => s + b.total_gbp, 0);
+  }
+
+  const isaContributed = contribForSubtypes(['isa', 'cash_isa', 'lisa']) ??
+    (accounts ?? []).filter(a => ['isa', 'cash_isa', 'lisa'].includes(a.account_subtype)).reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+  const lisaContributed = contribForSubtypes(['lisa']) ??
+    (accounts ?? []).filter(a => a.account_subtype === 'lisa').reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+  const pensionContributed = contribForSubtypes(['sipp']) ??
+    (accounts ?? []).filter(a => a.account_subtype === 'sipp').reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
 
   const ISA_LIMIT = 20000;
   const LISA_LIMIT = 4000;

@@ -73,6 +73,15 @@ def init_schema():
                     notes TEXT,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
+
+                CREATE TABLE IF NOT EXISTS contributions (
+                    id SERIAL PRIMARY KEY,
+                    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    amount_gbp NUMERIC(20, 6) NOT NULL,
+                    date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    notes TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
             """)
         conn.commit()
     finally:

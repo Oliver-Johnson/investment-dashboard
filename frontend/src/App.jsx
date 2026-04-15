@@ -5,6 +5,7 @@ import AccountCard from './components/AccountCard';
 import CreateAccountModal from './components/CreateAccountModal';
 import AddHoldingModal from './components/AddHoldingModal';
 import DividendPanel from './components/DividendPanel';
+import ContributionPanel from './components/ContributionPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -149,7 +150,8 @@ export default function App() {
           ) : (
             <>
               {accounts.length > 0 && (
-                <div className="mb-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+                  <ContributionPanel accounts={accounts} />
                   <DividendPanel accounts={accounts} />
                 </div>
               )}
