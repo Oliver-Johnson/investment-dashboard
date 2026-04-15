@@ -1,0 +1,1 @@
+ALTER TABLE holdings ADD COLUMN IF NOT EXISTS manual_price_gbp NUMERIC(20, 6);

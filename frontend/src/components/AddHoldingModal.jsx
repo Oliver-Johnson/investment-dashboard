@@ -9,6 +9,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
   const [displayName, setDisplayName] = useState('');
   const [unitCount, setUnitCount] = useState('0');
   const [currency, setCurrency] = useState('GBP');
+  const [manualPrice, setManualPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -28,6 +29,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
         currency,
       };
       if (displayName.trim()) body.name = displayName.trim();
+      if (manualPrice.trim()) body.manual_price_gbp = parseFloat(manualPrice);
       const res = await fetch(`${API_URL}/api/holdings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,7 +85,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleAdd()}
               />
-              <p className="text-xs text-gray-500 mt-1">LSE stocks: FCIT.L · US stocks: AAPL · UK funds without a ticker: full ISIN (e.g. GB00B0CNH163)</p>
+              <p className="text-xs text-gray-500 mt-1">For funds with no ticker (ISIN/SEDOL only), enter the identifier here and set a Manual Price below. For LSE-listed stocks/ETFs use FCIT.L format. For US stocks use AAPL format.</p>
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1.5 font-medium">Currency</label>
@@ -108,6 +110,21 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
               onChange={e => setDisplayName(e.target.value)}
               placeholder="e.g. City of London Investment Trust"
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+              Manual Price (£) <span className="text-slate-600">(optional)</span>
+            </label>
+            <input
+              type="number"
+              value={manualPrice}
+              onChange={e => setManualPrice(e.target.value)}
+              step="0.01"
+              min="0"
+              placeholder="Use for funds without a market ticker (ISIN/SEDOL only)"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
             />
           </div>
 

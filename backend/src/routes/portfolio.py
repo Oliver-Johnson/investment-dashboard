@@ -31,11 +31,15 @@ def holding_with_price_from_row(row: dict) -> HoldingWithPrice:
     price_gbp = None
     value_gbp = None
     if unit_count > 0:
-        try:
-            price_gbp = get_price_gbp(row["ticker"])
+        if row.get("manual_price_gbp"):
+            price_gbp = float(row["manual_price_gbp"])
             value_gbp = unit_count * price_gbp
-        except Exception:
-            pass
+        else:
+            try:
+                price_gbp = get_price_gbp(row["ticker"])
+                value_gbp = unit_count * price_gbp
+            except Exception:
+                pass
     freshness = get_freshness(row["last_holding_update"])
     return HoldingWithPrice(
         id=row["id"],

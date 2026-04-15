@@ -6,11 +6,15 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function EditHoldingModal({ holding, onClose, onSaved }) {
   const [units, setUnits] = useState('');
+  const [manualPrice, setManualPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (holding) setUnits(String(holding.unit_count ?? ''));
+    if (holding) {
+      setUnits(String(holding.unit_count ?? ''));
+      setManualPrice(holding.manual_price_gbp != null ? String(holding.manual_price_gbp) : '');
+    }
   }, [holding]);
 
   if (!holding) return null;
@@ -25,7 +29,10 @@ export default function EditHoldingModal({ holding, onClose, onSaved }) {
       const res = await fetch(`${API_URL}/api/portfolio/holdings/${holding.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit_count: parseFloat(units) }),
+        body: JSON.stringify({
+          unit_count: parseFloat(units),
+          manual_price_gbp: manualPrice.trim() ? parseFloat(manualPrice) : null,
+        }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       onSaved();
@@ -74,6 +81,21 @@ export default function EditHoldingModal({ holding, onClose, onSaved }) {
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
               placeholder="0.0000"
               autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1.5 font-medium">
+              Manual Price (£) <span className="text-slate-600">(optional)</span>
+            </label>
+            <input
+              type="number"
+              value={manualPrice}
+              onChange={e => setManualPrice(e.target.value)}
+              step="0.01"
+              min="0"
+              placeholder="Use for funds without a market ticker (ISIN/SEDOL only)"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
             />
           </div>
 
