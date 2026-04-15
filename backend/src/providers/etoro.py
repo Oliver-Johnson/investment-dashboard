@@ -223,7 +223,16 @@ def fetch_portfolio() -> list[dict]:
         current_price_gbp = price_usd / gbpusd
 
         open_rate = Decimal(str(pos.get("openRate") or 0))
-        avg_price_gbp = (open_rate / gbpusd) if open_rate > 0 else None
+        # currentRate is the current price in the instrument's native currency (e.g. SEK for SIVE.ST).
+        # Use it to convert openRate to GBP via the ratio current_price_gbp/currentRate,
+        # which handles any native currency correctly (SEK, EUR, etc.), not just USD.
+        current_rate_native = Decimal(str(pos.get("currentRate") or 0))
+        avg_price_gbp = None
+        if open_rate > 0:
+            if current_rate_native > 0 and current_price_gbp > 0:
+                avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
+            else:
+                avg_price_gbp = open_rate / gbpusd  # fallback: assume USD
 
         # eToro exposes realised+unrealised P&L directly as netProfit (USD).
         # Use it when available — more reliable than recomputing from openRate,
@@ -256,7 +265,13 @@ def fetch_portfolio() -> list[dict]:
             market_value_gbp = value_usd / gbpusd
             current_price_gbp = price_usd / gbpusd
             open_rate = Decimal(str(pos.get("openRate") or 0))
-            avg_price_gbp = (open_rate / gbpusd) if open_rate > 0 else None
+            current_rate_native = Decimal(str(pos.get("currentRate") or 0))
+            avg_price_gbp = None
+            if open_rate > 0:
+                if current_rate_native > 0 and current_price_gbp > 0:
+                    avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
+                else:
+                    avg_price_gbp = open_rate / gbpusd
             raw_profit = pos.get("netProfit") or pos.get("profit") or pos.get("pnl")
             net_profit_gbp = (Decimal(str(raw_profit)) / gbpusd) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
