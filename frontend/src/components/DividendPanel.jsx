@@ -18,11 +18,26 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Returns { start, end, label } for the UK tax year at offset 0 (current) or -1 (last)
+function getTaxYearBounds(offset = 0) {
+  const now = new Date();
+  const month = now.getMonth(); // 0-indexed
+  const day = now.getDate();
+  // Tax year starts 6 Apr; if today is before 6 Apr we're still in previous year
+  const baseYear = (month > 3 || (month === 3 && day >= 6)) ? now.getFullYear() : now.getFullYear() - 1;
+  const startYear = baseYear + offset;
+  const start = new Date(startYear, 3, 6); // 6 Apr
+  const end = new Date(startYear + 1, 3, 5, 23, 59, 59, 999); // 5 Apr 23:59:59
+  const label = `${startYear}/${String(startYear + 1).slice(2)}`;
+  return { start, end, label };
+}
+
 export default function DividendPanel({ accounts }) {
   const [dividends, setDividends] = useState([]);
   const [summary, setSummary] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [taxYearFilter, setTaxYearFilter] = useState('all');
 
   const fetchDividends = useCallback(async () => {
     try {
@@ -49,32 +64,71 @@ export default function DividendPanel({ accounts }) {
 
   const accountName = (id) => accounts?.find(a => a.id === id)?.name ?? `Account ${id}`;
 
+  const currentBounds = getTaxYearBounds(0);
+  const lastBounds = getTaxYearBounds(-1);
+
+  const filteredDividends = dividends.filter(d => {
+    if (taxYearFilter === 'all') return true;
+    const bounds = taxYearFilter === 'current' ? currentBounds : lastBounds;
+    const dateStr = d.pay_date || d.created_at;
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    return date >= bounds.start && date <= bounds.end;
+  });
+
+  const filteredTotal = filteredDividends.reduce((sum, d) => sum + (d.amount_gbp ?? 0), 0);
+
+  const TAX_YEAR_PILLS = [
+    { key: 'all', label: 'All time' },
+    { key: 'current', label: currentBounds.label },
+    { key: 'last', label: lastBounds.label },
+  ];
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between p-5 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <TrendingUp size={16} className="text-emerald-400" />
           <h2 className="text-sm font-semibold text-slate-200">Dividend Income</h2>
-          {summary && (
+          {!loading && (
             <span className="text-sm font-mono font-bold text-emerald-400 ml-2">
-              {formatGBP(summary.total_gbp)}
+              {formatGBP(taxYearFilter === 'all' && summary ? summary.total_gbp : filteredTotal)}
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
-        >
-          <Plus size={12} />
-          Log Dividend
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">
+            {TAX_YEAR_PILLS.map(pill => (
+              <button
+                key={pill.key}
+                onClick={() => setTaxYearFilter(pill.key)}
+                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                  taxYearFilter === pill.key
+                    ? 'bg-slate-600 text-slate-100 font-medium'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {pill.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <Plus size={12} />
+            Log Dividend
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="p-6 text-center text-slate-600 text-sm">Loading…</div>
-      ) : dividends.length === 0 ? (
+      ) : filteredDividends.length === 0 ? (
         <div className="p-6 text-center text-slate-600 text-sm">
-          No dividends logged yet. Use "Log Dividend" to record income.
+          {dividends.length === 0
+            ? 'No dividends logged yet. Use "Log Dividend" to record income.'
+            : 'No dividends in this period.'}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -90,7 +144,7 @@ export default function DividendPanel({ accounts }) {
               </tr>
             </thead>
             <tbody>
-              {dividends.map(d => (
+              {filteredDividends.map(d => (
                 <tr key={d.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                   <td className="py-2.5 pl-5 pr-4">
                     <div className="font-mono font-semibold text-slate-200">{d.ticker}</div>
