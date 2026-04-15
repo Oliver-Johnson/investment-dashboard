@@ -28,7 +28,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
         unit_count: parseFloat(unitCount) || 0,
         currency,
       };
-      if (displayName.trim()) body.name = displayName.trim();
+      if (displayName.trim()) body.display_name = displayName.trim();
       if (manualPrice.trim()) body.manual_price_gbp = parseFloat(manualPrice);
       const res = await fetch(`${API_URL}/api/holdings`, {
         method: 'POST',
