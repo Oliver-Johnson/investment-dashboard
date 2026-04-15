@@ -1,7 +1,7 @@
 # Usage:
 #   docker compose up -d
-#   Dashboard: http://localhost:3000
-#   API: http://localhost:8000
+#   Dashboard: http://192.168.1.232:3000
+#   API: http://192.168.1.232:8000
 
 services:
   postgres:
@@ -29,7 +29,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://localhost:8000
+        VITE_API_URL: http://192.168.1.232:8000
     ports:
       - "3000:80"
     depends_on:
