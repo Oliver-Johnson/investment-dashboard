@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+asyncpg
+psycopg2-binary
+yfinance
+pandas
+requests
+python-dotenv
+pydantic
