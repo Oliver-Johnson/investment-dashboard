@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/holdings", tags=["holdings"])
 
 @router.get("")
 def list_holdings(account_id: int = None):
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             if account_id is not None:
                 cur.execute(
@@ -21,7 +21,7 @@ def list_holdings(account_id: int = None):
 
 @router.post("", status_code=201)
 def create_holding(body: HoldingCreate):
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO holdings (account_id, ticker, display_name, unit_count, currency, notes)
@@ -34,7 +34,7 @@ def create_holding(body: HoldingCreate):
 
 @router.put("/{holding_id}")
 def update_holding(holding_id: int, body: HoldingUpdate):
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE holdings
@@ -54,7 +54,7 @@ def update_holding(holding_id: int, body: HoldingUpdate):
 
 @router.delete("/{holding_id}", status_code=204)
 def delete_holding(holding_id: int):
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM holdings WHERE id = %s RETURNING id", (holding_id,))
             if not cur.fetchone():

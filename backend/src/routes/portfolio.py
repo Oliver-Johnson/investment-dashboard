@@ -57,7 +57,7 @@ def portfolio_summary():
     account_summaries: list[AccountSummary] = []
     total_value = 0.0
 
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM accounts ORDER BY created_at")
             accounts = [dict(r) for r in cur.fetchall()]

@@ -1,5 +1,6 @@
 import os
 import psycopg2
+from contextlib import contextmanager
 from psycopg2.extras import RealDictCursor
 
 
@@ -10,6 +11,7 @@ def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 
+@contextmanager
 def get_db():
     conn = get_connection()
     try:

@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 @router.get("", response_model=list[Account])
 def list_accounts():
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM accounts ORDER BY created_at")
             return cur.fetchall()
@@ -15,7 +15,7 @@ def list_accounts():
 
 @router.post("", response_model=Account, status_code=201)
 def create_account(body: AccountCreate):
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO accounts (name, account_type, colour)
@@ -33,7 +33,7 @@ def update_account(account_id: int, body: AccountUpdate):
         raise HTTPException(status_code=400, detail="No fields to update")
     set_clause = ", ".join(f"{k} = %({k})s" for k in updates)
     updates["id"] = account_id
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"UPDATE accounts SET {set_clause} WHERE id = %(id)s RETURNING *",
@@ -47,7 +47,7 @@ def update_account(account_id: int, body: AccountUpdate):
 
 @router.delete("/{account_id}", status_code=204)
 def delete_account(account_id: int):
-    with next(get_db()) as conn:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM accounts WHERE id = %s RETURNING id", (account_id,))
             if not cur.fetchone():
