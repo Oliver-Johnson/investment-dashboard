@@ -97,8 +97,8 @@ export default function TotalValuePanel({ accounts, total }) {
   ].filter(a => a.contributed > 0);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-      <div className="flex items-start justify-between gap-8">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 md:gap-8">
         {/* Left: headline value */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-3">
@@ -108,7 +108,7 @@ export default function TotalValuePanel({ accounts, total }) {
             <span className="text-xs text-slate-500 font-medium uppercase tracking-widest">Total Portfolio Value</span>
           </div>
 
-          <div className="text-5xl font-bold text-slate-50 tracking-tight leading-none mb-1 font-mono">
+          <div className="text-4xl md:text-5xl font-bold text-slate-50 tracking-tight leading-none mb-1 font-mono">
             {formatGBPShort(total ?? 0)}
           </div>
           <div className="text-sm text-slate-500 font-mono mt-2">
@@ -116,7 +116,7 @@ export default function TotalValuePanel({ accounts, total }) {
           </div>
 
           {cashTotal > 0 && (
-            <div className="flex items-center gap-4 mt-3 text-xs font-mono text-slate-500">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs font-mono text-slate-500">
               <span>Invested <span className="text-slate-300">{formatGBP(investedTotal)}</span></span>
               <span className="text-slate-700">·</span>
               <span>Cash <span className="text-slate-300">{formatGBP(cashTotal)}</span></span>
@@ -143,11 +143,11 @@ export default function TotalValuePanel({ accounts, total }) {
                   const remaining = Math.max(0, a.limit - a.contributed);
                   return (
                     <div key={a.label}>
-                      <div className="flex justify-between text-xs mb-1">
+                      <div className="flex flex-wrap justify-between gap-x-2 text-xs mb-1">
                         <span className="text-slate-400 font-medium">{a.label}</span>
-                        <span className="font-mono text-slate-400">
+                        <span className="font-mono text-slate-400 text-right">
                           {formatGBP(a.contributed)} / {formatGBP(a.limit)}
-                          {remaining > 0 && <span className="text-slate-600"> · {formatGBP(remaining)} left</span>}
+                          {remaining > 0 && <span className="text-slate-600 hidden sm:inline"> · {formatGBP(remaining)} left</span>}
                         </span>
                       </div>
                       <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -185,7 +185,7 @@ export default function TotalValuePanel({ accounts, total }) {
             </div>
           )}
 
-          <div className="flex items-center gap-6 mt-6 pt-4 border-t border-slate-800">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-6 pt-4 border-t border-slate-800">
             <div>
               <div className="text-lg font-semibold text-slate-200">{accountCount}</div>
               <div className="text-xs text-slate-500">Accounts</div>
@@ -204,7 +204,7 @@ export default function TotalValuePanel({ accounts, total }) {
         </div>
 
         {/* Right: allocation chart */}
-        <div className="w-64 flex-shrink-0">
+        <div className="w-full md:w-64 md:flex-shrink-0 border-t md:border-t-0 md:border-l border-slate-800 pt-4 md:pt-0 md:pl-6">
           <div className="text-xs text-slate-500 font-medium uppercase tracking-widest mb-3">Allocation</div>
           <AllocationChart accounts={accounts} />
         </div>

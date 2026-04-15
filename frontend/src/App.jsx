@@ -106,7 +106,7 @@ export default function App() {
         isRefreshing={isRefreshing}
       />
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-3 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8">
         {error && !loading && (
           <ErrorBanner message={error} onRetry={() => fetchData(true)} />
         )}
