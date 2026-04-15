@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import TotalValuePanel from './components/TotalValuePanel';
-import ProviderCard from './components/ProviderCard';
+import AccountCard from './components/AccountCard';
+import CreateAccountModal from './components/CreateAccountModal';
+import AddHoldingModal from './components/AddHoldingModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -43,22 +45,25 @@ function ErrorBanner({ message, onRetry }) {
 }
 
 export default function App() {
-  const [providers, setProviders] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [total, setTotal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [addHoldingAccount, setAddHoldingAccount] = useState(null);
+
   const fetchData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setIsRefreshing(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/portfolio`);
+      const res = await fetch(`${API_URL}/api/portfolio/summary`);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = await res.json();
-      setProviders(data.providers ?? []);
-      setTotal(data.total_value ?? null);
+      setAccounts(data.accounts ?? []);
+      setTotal(data.total_value_gbp ?? null);
       setLastRefresh(new Date());
     } catch (e) {
       setError(e.message);
@@ -75,8 +80,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const computedTotal = total ?? providers.reduce(
-    (sum, p) => sum + (p.total_value ?? p.holdings?.reduce(
+  const computedTotal = total ?? accounts.reduce(
+    (sum, a) => sum + (a.total_value_gbp ?? a.holdings?.reduce(
       (s, h) => s + (h.unit_count ?? 0) * (h.current_price ?? 0), 0
     ) ?? 0),
     0
@@ -105,31 +110,40 @@ export default function App() {
             <div className="h-3 w-36 bg-slate-800 rounded" />
           </div>
         ) : (
-          !error && <TotalValuePanel providers={providers} total={computedTotal} />
+          !error && <TotalValuePanel accounts={accounts} total={computedTotal} />
         )}
 
         <div>
-          <h2 className="text-xs text-slate-500 font-medium uppercase tracking-widest mb-4">
-            Providers
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs text-slate-500 font-medium uppercase tracking-widest">
+              Accounts
+            </h2>
+            <button
+              onClick={() => setShowCreateAccount(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition-colors"
+            >
+              + Add Account
+            </button>
+          </div>
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
             </div>
-          ) : providers.length === 0 && !error ? (
+          ) : accounts.length === 0 && !error ? (
             <div className="text-center py-16 text-slate-600">
               <div className="text-4xl mb-3">📊</div>
-              <div className="text-sm">No provider data available</div>
-              <div className="text-xs mt-1">Check that the backend is running</div>
+              <div className="text-sm">No accounts yet</div>
+              <div className="text-xs mt-1">Add an account to get started</div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {providers.map(provider => (
-                <ProviderCard
-                  key={provider.id ?? provider.provider_name}
-                  provider={provider}
+              {accounts.map(account => (
+                <AccountCard
+                  key={account.id}
+                  account={account}
                   onDataChanged={() => fetchData(true)}
+                  onAddHolding={setAddHoldingAccount}
                 />
               ))}
             </div>
@@ -142,6 +156,22 @@ export default function App() {
           Portfolio Dashboard · Auto-refreshes every 60s · Values in GBP
         </p>
       </footer>
+
+      {showCreateAccount && (
+        <CreateAccountModal
+          onClose={() => setShowCreateAccount(false)}
+          onCreated={() => { fetchData(true); setShowCreateAccount(false); }}
+        />
+      )}
+
+      {addHoldingAccount && (
+        <AddHoldingModal
+          accounts={accounts}
+          preselectedAccount={addHoldingAccount}
+          onClose={() => setAddHoldingAccount(null)}
+          onAdded={() => { fetchData(true); setAddHoldingAccount(null); }}
+        />
+      )}
     </div>
   );
 }

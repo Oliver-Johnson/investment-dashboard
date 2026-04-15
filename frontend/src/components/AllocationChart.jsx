@@ -1,20 +1,4 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-
-const PROVIDER_COLORS = {
-  't212': '#3b82f6',
-  'trading212': '#3b82f6',
-  'barclays': '#1e40af',
-  'freetrade': '#10b981',
-  'columbia': '#8b5cf6',
-  'etoro': '#14b8a6',
-};
-
-function getColor(providerName, index) {
-  const key = providerName?.toLowerCase().replace(/[\s-]/g, '');
-  if (PROVIDER_COLORS[key]) return PROVIDER_COLORS[key];
-  const palette = ['#6366f1', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#84cc16'];
-  return palette[index % palette.length];
-}
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -52,12 +36,14 @@ const CustomLegend = ({ payload }) => (
   </ul>
 );
 
-export default function AllocationChart({ providers }) {
-  const data = (providers || [])
-    .map(p => ({ name: p.provider_name, value: p.total_value }))
+export default function AllocationChart({ accounts }) {
+  const data = (accounts || [])
+    .map(a => ({ name: a.name, value: a.total_value_gbp ?? 0, colour: a.colour || '#6366f1' }))
     .filter(d => d.value > 0);
 
   if (!data.length) return null;
+
+  const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="h-full flex flex-col">
@@ -74,21 +60,17 @@ export default function AllocationChart({ providers }) {
             stroke="none"
           >
             {data.map((entry, index) => (
-              <Cell
-                key={index}
-                fill={getColor(entry.name, index)}
-                opacity={0.9}
-              />
+              <Cell key={index} fill={entry.colour} opacity={0.9} />
             ))}
           </Pie>
           <Tooltip content={<CustomTooltip />} />
         </PieChart>
       </ResponsiveContainer>
       <CustomLegend
-        payload={data.map((d, i) => ({
+        payload={data.map(d => ({
           value: d.name,
-          color: getColor(d.name, i),
-          payload: { percent: d.value / data.reduce((s, x) => s + x.value, 0) },
+          color: d.colour,
+          payload: { percent: d.value / total },
         }))}
       />
     </div>

@@ -1,4 +1,7 @@
-import { Edit3 } from 'lucide-react';
+import { useState } from 'react';
+import { Edit3, Trash2 } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -17,8 +20,22 @@ function formatNumber(n, decimals = 4) {
   });
 }
 
-export default function HoldingRow({ holding, isManual, onEdit }) {
+export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
+  const [deleting, setDeleting] = useState(false);
   const value = (holding.unit_count ?? 0) * (holding.current_price ?? 0);
+
+  async function handleDelete() {
+    if (!confirm(`Delete holding "${holding.ticker}"?`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/holdings/${holding.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      onDeleted();
+    } catch (e) {
+      alert(`Failed to delete: ${e.message}`);
+      setDeleting(false);
+    }
+  }
 
   return (
     <tr className="group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors">
@@ -45,17 +62,27 @@ export default function HoldingRow({ holding, isManual, onEdit }) {
           {formatGBP(value)}
         </span>
       </td>
-      {isManual && (
-        <td className="py-2.5 pr-3 text-right w-8">
+      <td className="py-2.5 pr-3 text-right w-16">
+        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+          {isManual && (
+            <button
+              onClick={() => onEdit(holding)}
+              className="p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+              title="Edit holding"
+            >
+              <Edit3 size={11} />
+            </button>
+          )}
           <button
-            onClick={() => onEdit(holding)}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-all"
-            title="Edit holding"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="p-1 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
+            title="Delete holding"
           >
-            <Edit3 size={11} />
+            <Trash2 size={11} />
           </button>
-        </td>
-      )}
+        </div>
+      </td>
     </tr>
   );
 }
