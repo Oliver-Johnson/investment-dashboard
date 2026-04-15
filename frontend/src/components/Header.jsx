@@ -1,4 +1,6 @@
-import { RefreshCw, TrendingUp, Clock } from 'lucide-react';
+import { RefreshCw, TrendingUp, Clock, Download } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function Header({ lastRefresh, onRefresh, isRefreshing }) {
   const formatted = lastRefresh
@@ -25,6 +27,14 @@ export default function Header({ lastRefresh, onRefresh, isRefreshing }) {
             <Clock size={12} />
             <span>Last updated: <span className="text-slate-400 font-mono">{formatted}</span></span>
           </div>
+          <a
+            href={`${API_URL}/api/export/csv`}
+            download
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition-colors"
+          >
+            <Download size={12} />
+            Export CSV
+          </a>
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
