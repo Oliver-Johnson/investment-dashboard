@@ -11,11 +11,15 @@ function formatGBP(value) {
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-  const { name, value, percent } = payload[0];
+  const item = payload[0];
+  const name = item.name ?? item.payload?.name ?? '';
+  const value = item.value ?? 0;
+  // recharts may put percent on payload directly or on payload.payload
+  const pct = item.percent ?? item.payload?.percent ?? 0;
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 shadow-xl text-xs">
       <div className="font-semibold text-slate-200">{name}</div>
-      <div className="text-slate-400 mt-0.5">{formatGBP(value)} <span className="text-slate-500">({(percent * 100).toFixed(1)}%)</span></div>
+      <div className="text-slate-400 mt-0.5">{formatGBP(value)} <span className="text-slate-500">({(isNaN(pct) ? 0 : (pct * 100)).toFixed(1)}%)</span></div>
     </div>
   );
 };
@@ -29,7 +33,7 @@ const CustomLegend = ({ payload }) => (
           <span className="text-slate-400">{entry.value}</span>
         </div>
         <span className="font-mono text-slate-300 font-medium">
-          {(entry.payload.percent * 100).toFixed(1)}%
+          {(isNaN(entry.payload.percent) ? 0 : (entry.payload.percent * 100)).toFixed(1)}%
         </span>
       </li>
     ))}
