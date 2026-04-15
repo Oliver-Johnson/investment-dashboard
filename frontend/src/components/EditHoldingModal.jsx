@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function EditHoldingModal({ holding, onClose, onSaved }) {
   const [units, setUnits] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [manualPrice, setManualPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -13,24 +14,27 @@ export default function EditHoldingModal({ holding, onClose, onSaved }) {
   useEffect(() => {
     if (holding) {
       setUnits(String(holding.unit_count ?? ''));
+      setDisplayName(holding.display_name || holding.name || '');
       setManualPrice(holding.manual_price_gbp != null ? String(holding.manual_price_gbp) : '');
     }
   }, [holding]);
 
   if (!holding) return null;
 
-  const preview = (parseFloat(units) || 0) * (holding.current_price ?? 0);
-  const hasChanged = parseFloat(units) !== holding.unit_count;
+  const price = holding.price_gbp ?? holding.current_price ?? 0;
+  const preview = (parseFloat(units) || 0) * price;
+  const hasChanged = true; // always allow saving
 
   async function handleSave() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/portfolio/holdings/${holding.id}`, {
+      const res = await fetch(`${API_URL}/api/holdings/${holding.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           unit_count: parseFloat(units),
+          display_name: displayName.trim() || null,
           manual_price_gbp: manualPrice.trim() ? parseFloat(manualPrice) : null,
         }),
       });
@@ -71,6 +75,17 @@ export default function EditHoldingModal({ holding, onClose, onSaved }) {
         {/* Body */}
         <div className="px-5 py-5 space-y-4">
           <div>
+            <label className="block text-xs text-slate-400 mb-1.5 font-medium">Display Name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="e.g. F&C Investment Trust"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              autoFocus
+            />
+          </div>
+          <div>
             <label className="block text-xs text-slate-400 mb-1.5 font-medium">Unit Count</label>
             <input
               type="number"
@@ -103,7 +118,7 @@ export default function EditHoldingModal({ holding, onClose, onSaved }) {
           <div className="flex items-center justify-between px-3 py-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
             <div>
               <div className="text-xs text-slate-500">Current price</div>
-              <div className="text-sm font-mono text-slate-300">{formatGBP(holding.current_price)}</div>
+              <div className="text-sm font-mono text-slate-300">{formatGBP(price)}</div>
             </div>
             <div className="text-slate-600">×</div>
             <div className="text-right">
