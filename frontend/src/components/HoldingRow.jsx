@@ -22,7 +22,8 @@ function formatNumber(n, decimals = 4) {
 
 export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
   const [deleting, setDeleting] = useState(false);
-  const value = (holding.unit_count ?? 0) * (holding.current_price ?? 0);
+  const price = holding.price_gbp ?? holding.current_price ?? 0;
+  const value = holding.value_gbp ?? ((holding.unit_count ?? 0) * price);
 
   async function handleDelete() {
     if (!confirm(`Delete holding "${holding.ticker}"?`)) return;
@@ -54,7 +55,7 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
       </td>
       <td className="py-2.5 px-4 text-right">
         <span className="font-mono text-xs text-slate-400">
-          {formatGBP(holding.current_price)}
+          {formatGBP(price)}
         </span>
       </td>
       <td className="py-2.5 pl-4 pr-3 text-right">
