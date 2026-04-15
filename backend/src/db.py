@@ -33,11 +33,13 @@ def init_schema():
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(100) NOT NULL,
                     account_type VARCHAR(20) NOT NULL,
+                    account_subtype VARCHAR(20),
                     colour VARCHAR(7) DEFAULT '#6366f1',
                     cash_balance_gbp NUMERIC(20,6),
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
                 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cash_balance_gbp NUMERIC(20,6);
+                ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_subtype VARCHAR(20);
 
                 CREATE TABLE IF NOT EXISTS holdings (
                     id SERIAL PRIMARY KEY,

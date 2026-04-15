@@ -16,6 +16,19 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
   const isManual = !['t212', 'etoro'].includes(account.account_type);
   const colour = account.colour || '#6366f1';
 
+  const SUBTYPE_LABELS = {
+    isa: 'ISA', cash_isa: 'Cash ISA', lisa: 'LISA', sipp: 'Pension', gia: 'GIA'
+  };
+  const SUBTYPE_COLOURS = {
+    isa: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    cash_isa: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    lisa: 'text-violet-400 border-violet-500/30 bg-violet-500/10',
+    sipp: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+    gia: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+  };
+  const subtypeLabel = account.account_subtype ? SUBTYPE_LABELS[account.account_subtype] : null;
+  const subtypeColour = account.account_subtype ? (SUBTYPE_COLOURS[account.account_subtype] || 'text-slate-400 border-slate-600 bg-slate-800') : '';
+
   const total = account.total_value_gbp ?? account.holdings?.reduce(
     (sum, h) => sum + (h.unit_count ?? 0) * (h.current_price ?? 0),
     0
@@ -76,6 +89,11 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                       <><span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />Live API</>
                     )}
                   </span>
+                  {subtypeLabel && (
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs border font-medium ${subtypeColour}`}>
+                      {subtypeLabel}
+                    </span>
+                  )}
                   {isManual && account.last_updated && (
                     <FreshnessIndicator lastUpdated={account.last_updated} expiryHours={48} />
                   )}

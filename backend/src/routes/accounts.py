@@ -18,8 +18,8 @@ def create_account(body: AccountCreate):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO accounts (name, account_type, colour)
-                   VALUES (%(name)s, %(account_type)s, %(colour)s)
+                """INSERT INTO accounts (name, account_type, account_subtype, colour)
+                   VALUES (%(name)s, %(account_type)s, %(account_subtype)s, %(colour)s)
                    RETURNING *""",
                 body.model_dump(),
             )

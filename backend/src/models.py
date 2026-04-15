@@ -6,12 +6,14 @@ from pydantic import BaseModel
 class AccountCreate(BaseModel):
     name: str
     account_type: str  # 'manual' | 't212' | 'etoro'
+    account_subtype: Optional[str] = None  # 'isa' | 'lisa' | 'sipp' | 'gia' | 'cash_isa' | None
     colour: str = '#6366f1'
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     colour: Optional[str] = None
+    account_subtype: Optional[str] = None
     cash_balance_gbp: Optional[float] = None
 
 
@@ -19,6 +21,7 @@ class Account(BaseModel):
     id: int
     name: str
     account_type: str
+    account_subtype: Optional[str] = None
     colour: str
     cash_balance_gbp: Optional[float] = None
     created_at: datetime
@@ -59,6 +62,7 @@ class AccountSummary(BaseModel):
     id: int
     name: str
     account_type: str
+    account_subtype: Optional[str] = None
     colour: str
     total_value_gbp: float
     holdings: List[HoldingWithPrice]

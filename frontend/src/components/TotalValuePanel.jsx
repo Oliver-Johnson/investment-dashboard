@@ -16,14 +16,27 @@ function formatGBPShort(value) {
   return formatGBP(value);
 }
 
+const WRAPPER_GROUPS = [
+  { label: 'Tax-free', subtypes: ['isa', 'cash_isa', 'lisa'], colour: 'text-emerald-400' },
+  { label: 'Pension', subtypes: ['sipp'], colour: 'text-blue-400' },
+  { label: 'Taxable', subtypes: ['gia'], colour: 'text-amber-400' },
+];
+
 export default function TotalValuePanel({ accounts, total }) {
   const accountCount = accounts?.length ?? 0;
   const holdingCount = accounts?.reduce((s, a) => s + (a.holdings?.length ?? 0), 0) ?? 0;
 
   const cashTotal = accounts?.reduce((s, a) =>
-    s + (a.holdings ?? []).filter(h => h.ticker === 'CASH').reduce((cs, h) => cs + (h.value_gbp ?? 0), 0), 0
+    s + (a.holdings ?? []).filter(h => h.ticker === 'CASH' || h.ticker === 'CASH_GBP').reduce((cs, h) => cs + (h.value_gbp ?? 0), 0), 0
   ) ?? 0;
   const investedTotal = (total ?? 0) - cashTotal;
+
+  const wrapperTotals = WRAPPER_GROUPS.map(g => ({
+    ...g,
+    value: (accounts ?? [])
+      .filter(a => g.subtypes.includes(a.account_subtype))
+      .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
+  })).filter(g => g.value > 0);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
@@ -49,6 +62,17 @@ export default function TotalValuePanel({ accounts, total }) {
               <span>Invested <span className="text-slate-300">{formatGBP(investedTotal)}</span></span>
               <span className="text-slate-700">·</span>
               <span>Cash <span className="text-slate-300">{formatGBP(cashTotal)}</span></span>
+            </div>
+          )}
+
+          {wrapperTotals.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs font-mono text-slate-500">
+              {wrapperTotals.map((g, i) => (
+                <span key={i}>
+                  <span className={g.colour}>{g.label}</span>{' '}
+                  <span className="text-slate-300">{formatGBP(g.value)}</span>
+                </span>
+              ))}
             </div>
           )}
 

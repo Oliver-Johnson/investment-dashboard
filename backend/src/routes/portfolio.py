@@ -190,6 +190,7 @@ def portfolio_summary():
                     id=account_id,
                     name=account["name"],
                     account_type=account_type,
+                    account_subtype=account.get("account_subtype"),
                     colour=account["colour"],
                     total_value_gbp=account_total,
                     holdings=holdings_out,

@@ -20,9 +20,19 @@ const ACCOUNT_TYPES = [
   { value: 'etoro',  label: 'eToro' },
 ];
 
+const SUBTYPES = [
+  { value: '',         label: 'None / Unknown' },
+  { value: 'isa',      label: 'Stocks & Shares ISA' },
+  { value: 'cash_isa', label: 'Cash ISA' },
+  { value: 'lisa',     label: 'Lifetime ISA (LISA)' },
+  { value: 'sipp',     label: 'Pension (SIPP)' },
+  { value: 'gia',      label: 'General (GIA) — taxable' },
+];
+
 export default function CreateAccountModal({ onClose, onCreated }) {
   const [name, setName] = useState('');
   const [accountType, setAccountType] = useState('manual');
+  const [accountSubtype, setAccountSubtype] = useState('');
   const [colour, setColour] = useState(PRESET_COLOURS[0].value);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -35,7 +45,12 @@ export default function CreateAccountModal({ onClose, onCreated }) {
       const res = await fetch(`${API_URL}/api/accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), account_type: accountType, colour }),
+        body: JSON.stringify({
+          name: name.trim(),
+          account_type: accountType,
+          account_subtype: accountSubtype || null,
+          colour,
+        }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       onCreated();
@@ -75,17 +90,31 @@ export default function CreateAccountModal({ onClose, onCreated }) {
             />
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5 font-medium">Account Type</label>
-            <select
-              value={accountType}
-              onChange={e => setAccountType(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
-            >
-              {ACCOUNT_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5 font-medium">Account Type</label>
+              <select
+                value={accountType}
+                onChange={e => setAccountType(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              >
+                {ACCOUNT_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5 font-medium">Tax Wrapper</label>
+              <select
+                value={accountSubtype}
+                onChange={e => setAccountSubtype(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-colors"
+              >
+                {SUBTYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
