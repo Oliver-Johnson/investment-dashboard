@@ -11,7 +11,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
   const [expanded, setExpanded] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
-  const isManual = account.account_type !== 't212';
+  const isManual = !['t212', 'etoro'].includes(account.account_type);
   const colour = account.colour || '#6366f1';
 
   const total = account.total_value_gbp ?? account.holdings?.reduce(

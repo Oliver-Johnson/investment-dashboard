@@ -17,9 +17,8 @@ def _auth_header() -> dict:
 
 
 @lru_cache(maxsize=1)
-def _instrument_currencies() -> dict:
-    """Fetch T212 instrument metadata and return {ticker: currencyCode} map.
-    Cached in memory — restarts clear the cache."""
+def _instrument_metadata() -> dict:
+    """Fetch T212 instrument metadata. Returns {ticker: {currency, name}} map."""
     if not T212_API_KEY:
         return {}
     try:
@@ -29,7 +28,13 @@ def _instrument_currencies() -> dict:
             timeout=30,
         )
         resp.raise_for_status()
-        return {inst["ticker"]: inst.get("currencyCode", "GBP") for inst in resp.json()}
+        return {
+            inst["ticker"]: {
+                "currency": inst.get("currencyCode", "GBP"),
+                "name": inst.get("shortName") or inst.get("name", ""),
+            }
+            for inst in resp.json()
+        }
     except Exception:
         return {}
 
@@ -65,19 +70,23 @@ def fetch_portfolio() -> list[dict]:
     time.sleep(2)  # Rate limiting
 
     positions = resp.json()
-    currencies = _instrument_currencies()
+    metadata = _instrument_metadata()
     gbpusd_ref = [None]  # mutable cache for lazy GBPUSD fetch
     results = []
 
     for pos in positions:
         ticker = pos.get("ticker", "")
-        quantity = Decimal(str(pos.get("quantity", 0)))
+        quantity_manual = Decimal(str(pos.get("quantity", 0)))
+        quantity_pie = Decimal(str(pos.get("pieQuantity", 0)))
+        quantity = quantity_manual + quantity_pie
         avg_price = Decimal(str(pos.get("averagePrice", 0)))
         current_price = Decimal(str(pos.get("currentPrice", 0)))
         ppl_gbp = pos.get("ppl")
 
         # Use instrument metadata for currency; fall back to ticker heuristic
-        currency = currencies.get(ticker) or ("USD" if "_US_" in ticker else "GBP")
+        ticker_meta = metadata.get(ticker, {})
+        currency = ticker_meta.get("currency") or ("USD" if "_US_" in ticker else "GBP")
+        display_name = ticker_meta.get("name", "")
 
         current_price_gbp = _price_to_gbp(current_price, currency, gbpusd_ref)
         avg_price_gbp = _price_to_gbp(avg_price, currency, gbpusd_ref)
@@ -85,6 +94,7 @@ def fetch_portfolio() -> list[dict]:
 
         result = {
             "ticker": ticker,
+            "display_name": display_name,
             "quantity": quantity,
             "avg_price": avg_price_gbp,
             "current_price_gbp": current_price_gbp,

@@ -41,12 +41,10 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
   return (
     <tr className="group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors">
       <td className="py-2.5 pl-3 pr-4">
-        <span className="font-mono text-xs font-semibold text-slate-200 tracking-wide">
-          {holding.ticker}
+        <span className="text-xs font-semibold text-slate-200 truncate max-w-[140px]">
+          {holding.display_name || holding.name || holding.ticker}
         </span>
-        {holding.name && (
-          <div className="text-xs text-slate-500 truncate max-w-[120px]">{holding.name}</div>
-        )}
+        <div className="text-xs text-slate-500 font-mono">{holding.ticker}</div>
       </td>
       <td className="py-2.5 px-4 text-right">
         <span className="font-mono text-xs text-slate-300">
