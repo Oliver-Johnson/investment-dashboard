@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 import uuid
 import requests
 from decimal import Decimal
@@ -109,8 +110,16 @@ def _all_instrument_names() -> dict:
 
 
 def _instrument_names(instrument_ids_tuple: tuple) -> dict:
-    """Look up names for specific instrument IDs from the cached full map."""
-    all_names = _all_instrument_names()
+    """Look up names from the cached map. Non-blocking: returns eToro #ID if cache not ready."""
+    # Check if cache is populated without blocking on a full fetch
+    cache_info = _all_instrument_names.cache_info()
+    if cache_info.currsize > 0:
+        all_names = _all_instrument_names()
+    else:
+        # Cache not ready — trigger background fetch and return IDs for now
+        threading.Thread(target=_all_instrument_names, daemon=True).start()
+        all_names = {}
+
     if not instrument_ids_tuple:
         return all_names
     return {iid: all_names.get(iid, f"eToro #{iid}") for iid in instrument_ids_tuple}

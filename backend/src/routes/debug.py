@@ -19,6 +19,24 @@ def _etoro_headers():
     }
 
 
+@router.get("/etoro-portfolio-keys")
+def debug_etoro_portfolio_keys():
+    """Show all top-level keys in clientPortfolio response (excluding large arrays)."""
+    try:
+        resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/trading/info/portfolio",
+            headers=_etoro_headers(), timeout=20
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        cp = data.get("clientPortfolio", {})
+        # Return all fields except the large arrays
+        summary = {k: v for k, v in cp.items() if k not in ("positions", "mirrors")}
+        return {"clientPortfolio_keys": summary, "top_level_keys": list(data.keys())}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/etoro-instruments")
 def debug_etoro_instruments():
     """Try multiple eToro instrument lookup methods and report which works."""
