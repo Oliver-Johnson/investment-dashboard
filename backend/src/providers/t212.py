@@ -118,3 +118,16 @@ def fetch_portfolio() -> list[dict]:
     _portfolio_cache["data"] = results
     _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
     return results
+
+
+def fetch_cash_balance() -> dict | None:
+    """Return T212 cash balance: {free, currency}. Returns None on error."""
+    if not T212_API_KEY:
+        return None
+    try:
+        resp = requests.get(f"{T212_BASE_URL}/equity/account/cash", headers=_auth_header(), timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return {"free": float(data.get("free", 0)), "currency": data.get("currency", "GBP")}
+    except Exception:
+        return None

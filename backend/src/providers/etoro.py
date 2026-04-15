@@ -8,6 +8,7 @@ from src.providers.yfinance_client import _get_gbpusd_rate
 
 # 5-minute portfolio cache to avoid slow repeated eToro API calls
 _portfolio_cache: dict = {"data": None, "expires": 0.0}
+_cash_cache: dict = {"data": None, "expires": 0.0}
 
 ETORO_BASE_URL = "https://public-api.etoro.com"
 ETORO_API_KEY = os.getenv("ETORO_API_KEY", "")    # Public API Key
@@ -125,11 +126,20 @@ def fetch_portfolio() -> list[dict]:
         raise RuntimeError(f"eToro API error: {e}")
 
     data = resp.json()
-    positions = (
-        data.get("clientPortfolio", {}).get("positions", [])
-        or data.get("positions", [])
+    client_portfolio = data.get("clientPortfolio", {})
+    positions = client_portfolio.get("positions", []) or data.get("positions", [])
+    mirrors = client_portfolio.get("mirrors", [])
+
+    # Cache cash balance from portfolio response
+    # eToro reports cash in USD; grab whichever field is available
+    raw_cash_usd = (
+        client_portfolio.get("availableToTrade")
+        or client_portfolio.get("creditByRealizedEquity")
+        or client_portfolio.get("credit")
+        or 0
     )
-    mirrors = data.get("clientPortfolio", {}).get("mirrors", [])
+    _cash_cache["data"] = {"free_usd": float(raw_cash_usd)}
+    _cash_cache["expires"] = time.time() + 300
 
     if not positions and not mirrors:
         return []
@@ -197,3 +207,22 @@ def fetch_portfolio() -> list[dict]:
     _portfolio_cache["data"] = results
     _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
     return results
+
+
+def fetch_cash_balance() -> dict | None:
+    """Return eToro cash balance in GBP: {free, currency}. Returns None on error."""
+    # Trigger portfolio fetch if needed (populates _cash_cache)
+    if _cash_cache["data"] is None:
+        try:
+            fetch_portfolio()
+        except Exception:
+            return None
+    cash = _cash_cache.get("data")
+    if not cash:
+        return None
+    try:
+        gbpusd = _get_gbpusd_rate()
+        free_gbp = cash["free_usd"] / gbpusd
+        return {"free": free_gbp, "currency": "GBP"}
+    except Exception:
+        return None

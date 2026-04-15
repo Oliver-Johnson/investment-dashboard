@@ -107,6 +107,17 @@ def portfolio_summary():
                         if row["ticker"] not in t212_tickers:
                             holdings_out.append(holding_with_price_from_row(row))
 
+                    # Append cash balance as a pseudo-holding
+                    cash = t212.fetch_cash_balance()
+                    if cash and cash.get("free", 0) > 0.01:
+                        holdings_out.append(HoldingWithPrice(
+                            id=0, account_id=account_id,
+                            ticker="CASH", display_name="Cash Balance",
+                            unit_count=1.0, currency=cash["currency"],
+                            price_gbp=cash["free"], value_gbp=cash["free"],
+                            last_holding_update=now, freshness="green",
+                        ))
+
                 elif account_type == "etoro":
                     # Get live positions from eToro API
                     etoro_tickers: set[str] = set()
@@ -146,6 +157,17 @@ def portfolio_summary():
                     for row in db_holdings:
                         if row["ticker"] not in etoro_tickers:
                             holdings_out.append(holding_with_price_from_row(row))
+
+                    # Append cash balance as a pseudo-holding
+                    cash = etoro.fetch_cash_balance()
+                    if cash and cash.get("free", 0) > 0.01:
+                        holdings_out.append(HoldingWithPrice(
+                            id=0, account_id=account_id,
+                            ticker="CASH", display_name="Cash Balance",
+                            unit_count=1.0, currency=cash["currency"],
+                            price_gbp=cash["free"], value_gbp=cash["free"],
+                            last_holding_update=now, freshness="green",
+                        ))
 
                 else:
                     # manual: use DB holdings + yfinance prices
