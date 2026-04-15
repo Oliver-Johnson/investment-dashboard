@@ -40,10 +40,37 @@ const CustomLegend = ({ payload }) => (
   </ul>
 );
 
+function hexToHue(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  if (max === min) return 0;
+  const d = max - min;
+  let h = max === r ? (g - b) / d + (g < b ? 6 : 0)
+         : max === g ? (b - r) / d + 2
+         : (r - g) / d + 4;
+  return (h / 6) * 360;
+}
+
+// Interleave sorted array so adjacent slices have maximally different hues
+function interleave(arr) {
+  const mid = Math.ceil(arr.length / 2);
+  const result = [];
+  for (let i = 0; i < mid; i++) {
+    result.push(arr[i]);
+    if (arr[mid + i]) result.push(arr[mid + i]);
+  }
+  return result;
+}
+
 export default function AllocationChart({ accounts }) {
-  const data = (accounts || [])
-    .map(a => ({ name: a.name, value: a.total_value_gbp ?? 0, colour: a.colour || '#6366f1' }))
-    .filter(d => d.value > 0);
+  const data = interleave(
+    (accounts || [])
+      .map(a => ({ name: a.name, value: a.total_value_gbp ?? 0, colour: a.colour || '#6366f1' }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => hexToHue(a.colour) - hexToHue(b.colour))
+  );
 
   if (!data.length) return null;
 
