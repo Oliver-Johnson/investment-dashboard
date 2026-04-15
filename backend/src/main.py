@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.db import init_schema, seed_holdings
-from src.routes import portfolio, holdings
+from src.db import init_schema
+from src.routes import portfolio, holdings, accounts
 
 app = FastAPI(title="Investment Dashboard API")
 
@@ -17,11 +17,11 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_schema()
-    seed_holdings()
 
 
 app.include_router(portfolio.router)
 app.include_router(holdings.router)
+app.include_router(accounts.router)
 
 
 @app.get("/health")

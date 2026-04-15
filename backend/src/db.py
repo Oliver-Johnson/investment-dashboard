@@ -1,23 +1,15 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from contextlib import contextmanager
+
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@postgres:5432/investment_db")
-
-SEED_HOLDINGS = [
-    {"provider": "freetrade", "ticker": "FCIT.L", "display_name": "Foreign & Colonial Investment Trust", "unit_count": 0, "currency": "GBP"},
-    {"provider": "columbia", "ticker": "FCIT.L", "display_name": "Foreign & Colonial Investment Trust (Columbia)", "unit_count": 0, "currency": "GBP"},
-    {"provider": "barclays", "ticker": "FCIT.L", "display_name": "Foreign & Colonial Investment Trust (Barclays)", "unit_count": 0, "currency": "GBP"},
-    {"provider": "etoro", "ticker": "FCIT.L", "display_name": "Foreign & Colonial Investment Trust (eToro)", "unit_count": 0, "currency": "GBP"},
-]
 
 
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 
-@contextmanager
 def get_db():
     conn = get_connection()
     try:
@@ -31,15 +23,24 @@ def get_db():
 
 
 def init_schema():
-    with get_db() as conn:
+    conn = get_connection()
+    try:
         with conn.cursor() as cur:
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    account_type VARCHAR(20) NOT NULL,
+                    colour VARCHAR(7) DEFAULT '#6366f1',
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+
                 CREATE TABLE IF NOT EXISTS holdings (
                     id SERIAL PRIMARY KEY,
-                    provider VARCHAR(50) NOT NULL,
+                    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
                     ticker VARCHAR(20) NOT NULL,
                     display_name VARCHAR(100),
-                    unit_count DECIMAL(15,4) NOT NULL,
+                    unit_count DECIMAL(15,4) NOT NULL DEFAULT 0,
                     currency VARCHAR(3) DEFAULT 'GBP',
                     last_holding_update TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     notes TEXT
@@ -51,18 +52,6 @@ def init_schema():
                     last_fetched TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
             """)
-
-
-def seed_holdings():
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) as count FROM holdings")
-            row = cur.fetchone()
-            if row["count"] > 0:
-                return
-            for h in SEED_HOLDINGS:
-                cur.execute(
-                    """INSERT INTO holdings (provider, ticker, display_name, unit_count, currency)
-                       VALUES (%(provider)s, %(ticker)s, %(display_name)s, %(unit_count)s, %(currency)s)""",
-                    h
-                )
+        conn.commit()
+    finally:
+        conn.close()

@@ -1,19 +1,11 @@
 from datetime import datetime
-from decimal import Decimal
 from fastapi import APIRouter
 from src.db import get_db
-from src.models import PortfolioSummary, ProviderSummary, ProviderHolding
+from src.models import AccountSummary, HoldingWithPrice, PortfolioSummary
 from src.providers import t212
 from src.providers.yfinance_client import get_price_gbp
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
-
-MANUAL_PROVIDERS = {
-    "barclays": "Barclays Smart Investor",
-    "freetrade": "Freetrade",
-    "columbia": "Columbia Threadneedle",
-    "etoro": "eToro",
-}
 
 
 def get_freshness(last_update: datetime) -> str:
@@ -25,104 +17,122 @@ def get_freshness(last_update: datetime) -> str:
     return "red"
 
 
-def build_manual_provider_summary(provider: str, label: str, rows: list[dict]) -> ProviderSummary:
-    holdings = []
-    total = Decimal("0")
-    last_update = None
+FRESHNESS_ORDER = {"red": 0, "amber": 1, "green": 2}
 
-    for row in rows:
-        unit_count = Decimal(str(row["unit_count"]))
-        price_gbp = None
-        market_value = None
 
-        if unit_count > 0:
-            try:
-                price_gbp = Decimal(str(get_price_gbp(row["ticker"])))
-                market_value = unit_count * price_gbp
-                total += market_value
-            except Exception:
-                pass
+def worst_freshness(values: list[str]) -> str:
+    if not values:
+        return "red"
+    return min(values, key=lambda f: FRESHNESS_ORDER.get(f, 0))
 
-        holdings.append(ProviderHolding(
-            ticker=row["ticker"],
-            display_name=row.get("display_name"),
-            quantity=unit_count,
-            current_price_gbp=price_gbp,
-            market_value_gbp=market_value,
-        ))
 
-        update_ts = row["last_holding_update"]
-        if last_update is None or update_ts > last_update:
-            last_update = update_ts
-
-    freshness = get_freshness(last_update) if last_update else "red"
-
-    return ProviderSummary(
-        name=provider,
-        label=label,
-        total_value_gbp=total,
-        holdings=holdings,
-        source="manual",
-        last_holding_update=last_update,
+def holding_with_price_from_row(row: dict) -> HoldingWithPrice:
+    unit_count = float(row["unit_count"])
+    price_gbp = None
+    value_gbp = None
+    if unit_count > 0:
+        try:
+            price_gbp = get_price_gbp(row["ticker"])
+            value_gbp = unit_count * price_gbp
+        except Exception:
+            pass
+    freshness = get_freshness(row["last_holding_update"])
+    return HoldingWithPrice(
+        id=row["id"],
+        account_id=row["account_id"],
+        ticker=row["ticker"],
+        display_name=row.get("display_name"),
+        unit_count=unit_count,
+        currency=row.get("currency", "GBP"),
+        price_gbp=price_gbp,
+        value_gbp=value_gbp,
+        last_holding_update=row["last_holding_update"],
         freshness=freshness,
     )
 
 
 @router.get("/summary", response_model=PortfolioSummary)
 def portfolio_summary():
-    provider_summaries = []
-    total_value = Decimal("0")
+    now = datetime.utcnow()
+    account_summaries: list[AccountSummary] = []
+    total_value = 0.0
 
-    # Trading 212 (API)
-    t212_error = None
-    t212_holdings = []
-    t212_total = Decimal("0")
-    try:
-        positions = t212.fetch_portfolio()
-        for pos in positions:
-            t212_holdings.append(ProviderHolding(
-                ticker=pos["ticker"],
-                quantity=pos["quantity"],
-                avg_price=pos.get("avg_price"),
-                current_price_gbp=pos.get("current_price_gbp"),
-                market_value_gbp=pos.get("market_value_gbp"),
-            ))
-            t212_total += pos.get("market_value_gbp") or Decimal("0")
-    except Exception as e:
-        t212_error = str(e)
-
-    provider_summaries.append(ProviderSummary(
-        name="trading212",
-        label="Trading 212",
-        total_value_gbp=t212_total,
-        holdings=t212_holdings,
-        source="api",
-        last_updated=datetime.utcnow(),
-        error=t212_error,
-    ))
-    total_value += t212_total
-
-    # Manual providers
-    with get_db() as conn:
+    with next(get_db()) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM holdings WHERE provider = ANY(%s) ORDER BY provider, ticker",
-                (list(MANUAL_PROVIDERS.keys()),)
-            )
-            all_rows = cur.fetchall()
+            cur.execute("SELECT * FROM accounts ORDER BY created_at")
+            accounts = [dict(r) for r in cur.fetchall()]
 
-    by_provider: dict[str, list] = {p: [] for p in MANUAL_PROVIDERS}
-    for row in all_rows:
-        p = row["provider"]
-        if p in by_provider:
-            by_provider[p].append(dict(row))
+            for account in accounts:
+                account_id = account["id"]
+                account_type = account["account_type"]
 
-    for provider, label in MANUAL_PROVIDERS.items():
-        summary = build_manual_provider_summary(provider, label, by_provider[provider])
-        provider_summaries.append(summary)
-        total_value += summary.total_value_gbp
+                # Fetch DB holdings for this account
+                cur.execute(
+                    "SELECT * FROM holdings WHERE account_id = %s ORDER BY ticker",
+                    (account_id,),
+                )
+                db_holdings = [dict(r) for r in cur.fetchall()]
+
+                holdings_out: list[HoldingWithPrice] = []
+
+                if account_type == "t212":
+                    # Get live positions from T212
+                    t212_tickers: set[str] = set()
+                    try:
+                        t212_positions = t212.fetch_portfolio()
+                    except Exception:
+                        t212_positions = []
+
+                    for pos in t212_positions:
+                        t212_tickers.add(pos["ticker"])
+                        holdings_out.append(HoldingWithPrice(
+                            id=0,  # T212 positions don't have a DB id
+                            account_id=account_id,
+                            ticker=pos["ticker"],
+                            display_name=pos.get("display_name"),
+                            unit_count=float(pos.get("quantity", 0)),
+                            currency=pos.get("currency", "GBP"),
+                            price_gbp=float(pos["current_price_gbp"]) if pos.get("current_price_gbp") else None,
+                            value_gbp=float(pos["market_value_gbp"]) if pos.get("market_value_gbp") else None,
+                            last_holding_update=now,
+                            freshness="green",
+                        ))
+
+                    # Also include any DB holdings not covered by T212 (manual additions)
+                    for row in db_holdings:
+                        if row["ticker"] not in t212_tickers:
+                            holdings_out.append(holding_with_price_from_row(row))
+
+                else:
+                    # manual / etoro: use DB holdings + yfinance prices
+                    for row in db_holdings:
+                        holdings_out.append(holding_with_price_from_row(row))
+
+                account_total = sum(h.value_gbp or 0.0 for h in holdings_out)
+                total_value += account_total
+
+                # Freshness only meaningful for manual/etoro accounts
+                freshness_vals = [h.freshness for h in holdings_out] if account_type != "t212" else []
+                account_freshness = worst_freshness(freshness_vals) if freshness_vals else None
+
+                last_updated = now
+                if db_holdings:
+                    last_updated = max(
+                        r["last_holding_update"] for r in db_holdings
+                    )
+
+                account_summaries.append(AccountSummary(
+                    id=account_id,
+                    name=account["name"],
+                    account_type=account_type,
+                    colour=account["colour"],
+                    total_value_gbp=account_total,
+                    holdings=holdings_out,
+                    freshness=account_freshness,
+                    last_updated=last_updated,
+                ))
 
     return PortfolioSummary(
         total_value_gbp=total_value,
-        providers=provider_summaries,
+        accounts=account_summaries,
     )
