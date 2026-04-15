@@ -216,6 +216,9 @@ def fetch_portfolio() -> list[dict]:
         market_value_gbp = value_usd / gbpusd
         current_price_gbp = price_usd / gbpusd
 
+        open_rate = Decimal(str(pos.get("openRate") or 0))
+        avg_price_gbp = (open_rate / gbpusd) if open_rate > 0 else None
+
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
         ticker = str(instrument_id)  # eToro uses numeric IDs, not tickers
 
@@ -226,6 +229,7 @@ def fetch_portfolio() -> list[dict]:
             "currency": "USD",
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
+            "avg_price_gbp": avg_price_gbp,
         })
 
     # Also include copytrade (mirror) positions
@@ -238,6 +242,8 @@ def fetch_portfolio() -> list[dict]:
             price_usd = (value_usd / units) if units else Decimal("0")
             market_value_gbp = value_usd / gbpusd
             current_price_gbp = price_usd / gbpusd
+            open_rate = Decimal(str(pos.get("openRate") or 0))
+            avg_price_gbp = (open_rate / gbpusd) if open_rate > 0 else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
             results.append({
                 "ticker": str(instrument_id),
@@ -246,6 +252,7 @@ def fetch_portfolio() -> list[dict]:
                 "currency": "USD",
                 "current_price_gbp": current_price_gbp,
                 "market_value_gbp": market_value_gbp,
+                "avg_price_gbp": avg_price_gbp,
             })
 
     _portfolio_cache["data"] = results

@@ -101,15 +101,27 @@ def portfolio_summary():
 
                     for pos in t212_positions:
                         t212_tickers.add(pos["ticker"])
+                        price_gbp = float(pos["current_price_gbp"]) if pos.get("current_price_gbp") else None
+                        unit_count = float(pos.get("quantity", 0))
+                        avg_cost_gbp = float(pos["avg_price"]) if pos.get("avg_price") else None
+                        gain_loss_gbp = None
+                        gain_loss_pct = None
+                        if avg_cost_gbp and price_gbp and unit_count > 0:
+                            cost_basis = avg_cost_gbp * unit_count
+                            gain_loss_gbp = (price_gbp - avg_cost_gbp) * unit_count
+                            gain_loss_pct = (gain_loss_gbp / cost_basis) * 100 if cost_basis else None
                         holdings_out.append(HoldingWithPrice(
                             id=0,  # T212 positions don't have a DB id
                             account_id=account_id,
                             ticker=pos["ticker"],
                             display_name=pos.get("display_name"),
-                            unit_count=float(pos.get("quantity", 0)),
+                            unit_count=unit_count,
                             currency=pos.get("currency", "GBP"),
-                            price_gbp=float(pos["current_price_gbp"]) if pos.get("current_price_gbp") else None,
+                            price_gbp=price_gbp,
                             value_gbp=float(pos["market_value_gbp"]) if pos.get("market_value_gbp") else None,
+                            avg_cost_gbp=avg_cost_gbp,
+                            gain_loss_gbp=gain_loss_gbp,
+                            gain_loss_pct=gain_loss_pct,
                             last_holding_update=now,
                             freshness="green",
                         ))
@@ -139,15 +151,27 @@ def portfolio_summary():
 
                     for pos in etoro_positions:
                         etoro_tickers.add(pos["ticker"])
+                        price_gbp = float(pos["current_price_gbp"]) if pos.get("current_price_gbp") else None
+                        unit_count = float(pos.get("quantity", 0))
+                        avg_cost_gbp = float(pos["avg_price_gbp"]) if pos.get("avg_price_gbp") else None
+                        gain_loss_gbp = None
+                        gain_loss_pct = None
+                        if avg_cost_gbp and price_gbp and unit_count > 0:
+                            cost_basis = avg_cost_gbp * unit_count
+                            gain_loss_gbp = (price_gbp - avg_cost_gbp) * unit_count
+                            gain_loss_pct = (gain_loss_gbp / cost_basis) * 100 if cost_basis else None
                         holdings_out.append(HoldingWithPrice(
                             id=0,  # eToro positions don't have a DB id
                             account_id=account_id,
                             ticker=pos["ticker"],
                             display_name=pos.get("display_name"),
-                            unit_count=float(pos.get("quantity", 0)),
+                            unit_count=unit_count,
                             currency=pos.get("currency", "USD"),
-                            price_gbp=float(pos["current_price_gbp"]) if pos.get("current_price_gbp") else None,
+                            price_gbp=price_gbp,
                             value_gbp=float(pos["market_value_gbp"]) if pos.get("market_value_gbp") else None,
+                            avg_cost_gbp=avg_cost_gbp,
+                            gain_loss_gbp=gain_loss_gbp,
+                            gain_loss_pct=gain_loss_pct,
                             last_holding_update=now,
                             freshness="green",
                         ))
