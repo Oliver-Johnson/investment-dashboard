@@ -30,11 +30,33 @@ def debug_etoro_portfolio_keys():
         resp.raise_for_status()
         data = resp.json()
         cp = data.get("clientPortfolio", {})
-        # Return all fields except the large arrays
         summary = {k: v for k, v in cp.items() if k not in ("positions", "mirrors")}
         return {"clientPortfolio_keys": summary, "top_level_keys": list(data.keys())}
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.get("/etoro-balances")
+def debug_etoro_balances():
+    """Probe eToro endpoints that may contain multi-currency balances."""
+    results = {}
+    endpoints = [
+        "/api/v1/trading/info/account",
+        "/api/v1/accounts/balance",
+        "/api/v1/accounts/wallets",
+        "/api/v1/trading/info/balances",
+        "/api/v1/trading/info/wallet",
+        "/api/v1/user/info",
+        "/api/v1/accounts/info",
+        "/api/v1/trading/financials",
+    ]
+    for path in endpoints:
+        try:
+            r = requests.get(f"{ETORO_BASE_URL}{path}", headers=_etoro_headers(), timeout=10)
+            results[path] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:200]}
+        except Exception as e:
+            results[path] = {"error": str(e)}
+    return results
 
 
 @router.get("/etoro-instruments")
