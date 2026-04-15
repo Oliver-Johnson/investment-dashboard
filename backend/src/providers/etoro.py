@@ -22,7 +22,7 @@ def _auth_headers() -> dict:
 
 @lru_cache(maxsize=1)
 def _instrument_names(instrument_ids_tuple: tuple) -> dict:
-    """Fetch instrument names for a tuple of instrument IDs. Returns {id: name}."""
+    """Fetch instrument display names. Returns {id: name}."""
     if not instrument_ids_tuple:
         return {}
     ids_str = ",".join(str(i) for i in instrument_ids_tuple)
@@ -35,17 +35,18 @@ def _instrument_names(instrument_ids_tuple: tuple) -> dict:
         )
         resp.raise_for_status()
         data = resp.json()
-        instruments = data if isinstance(data, list) else data.get("instruments", [])
+        # Response wraps in instrumentDisplayDatas; field names use lowercase
+        instruments = data.get("instrumentDisplayDatas", data if isinstance(data, list) else [])
         return {
-            inst.get("instrumentID") or inst.get("InstrumentID"): (
-                inst.get("instrumentDisplayName")
-                or inst.get("instrumentName")
-                or inst.get("symbolFull")
-                or inst.get("ticker")
-                or f"Instrument {inst.get('instrumentID', '?')}"
+            inst.get("instrumentId"): (
+                inst.get("displayname")
+                or inst.get("internalInstrumentDisplayName")
+                or inst.get("symbol")
+                or inst.get("internalSymbolFull")
+                or f"Instrument {inst.get('instrumentId', '?')}"
             )
             for inst in instruments
-            if inst.get("instrumentID") or inst.get("InstrumentID")
+            if inst.get("instrumentId")
         }
     except Exception:
         return {}
@@ -81,12 +82,19 @@ def fetch_portfolio() -> list[dict]:
         data.get("clientPortfolio", {}).get("positions", [])
         or data.get("positions", [])
     )
+    mirrors = data.get("clientPortfolio", {}).get("mirrors", [])
 
-    if not positions:
+    if not positions and not mirrors:
         return []
 
-    # Fetch instrument names in one batch call
-    instrument_ids = tuple(sorted({pos.get("instrumentID") for pos in positions if pos.get("instrumentID")}))
+    # Collect ALL instrument IDs (direct + mirror positions) before fetching names
+    all_instrument_ids = {pos.get("instrumentID") for pos in positions if pos.get("instrumentID")}
+    for mirror in mirrors:
+        for pos in mirror.get("positions", []):
+            if pos.get("instrumentID"):
+                all_instrument_ids.add(pos["instrumentID"])
+
+    instrument_ids = tuple(sorted(all_instrument_ids))
     names = _instrument_names(instrument_ids)
 
     gbpusd = Decimal(str(_get_gbpusd_rate()))
@@ -118,5 +126,25 @@ def fetch_portfolio() -> list[dict]:
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
         })
+
+    # Also include copytrade (mirror) positions
+    for mirror in mirrors:
+        mirror_name = mirror.get("parentUsername", "Copy Trade")
+        for pos in mirror.get("positions", []):
+            instrument_id = pos.get("instrumentID", 0)
+            units = Decimal(str(pos.get("units", 0)))
+            value_usd = Decimal(str(pos.get("amount") or pos.get("unitsBaseValueDollars", 0) or 0))
+            price_usd = (value_usd / units) if units else Decimal("0")
+            market_value_gbp = value_usd / gbpusd
+            current_price_gbp = price_usd / gbpusd
+            display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
+            results.append({
+                "ticker": str(instrument_id),
+                "display_name": f"{display_name} (via {mirror_name})",
+                "quantity": units,
+                "currency": "USD",
+                "current_price_gbp": current_price_gbp,
+                "market_value_gbp": market_value_gbp,
+            })
 
     return results

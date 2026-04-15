@@ -84,6 +84,12 @@ def fetch_portfolio() -> list[dict]:
 
         # Use instrument metadata for currency; fall back to ticker heuristic
         ticker_meta = metadata.get(ticker, {})
+        if not ticker_meta:
+            # T212 variant tickers: SMSNl_EQ → try SMSN_EQ (strip char before _EQ)
+            import re as _re
+            base = _re.sub(r'[0-9a-z](_EQ)$', r'\1', ticker)
+            if base != ticker:
+                ticker_meta = metadata.get(base, {})
         currency = ticker_meta.get("currency") or ("USD" if "_US_" in ticker else "GBP")
         display_name = ticker_meta.get("name", "")
 
