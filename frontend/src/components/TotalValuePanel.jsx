@@ -20,6 +20,11 @@ export default function TotalValuePanel({ accounts, total }) {
   const accountCount = accounts?.length ?? 0;
   const holdingCount = accounts?.reduce((s, a) => s + (a.holdings?.length ?? 0), 0) ?? 0;
 
+  const cashTotal = accounts?.reduce((s, a) =>
+    s + (a.holdings ?? []).filter(h => h.ticker === 'CASH').reduce((cs, h) => cs + (h.value_gbp ?? 0), 0), 0
+  ) ?? 0;
+  const investedTotal = (total ?? 0) - cashTotal;
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
       <div className="flex items-start justify-between gap-8">
@@ -38,6 +43,14 @@ export default function TotalValuePanel({ accounts, total }) {
           <div className="text-sm text-slate-500 font-mono mt-2">
             {formatGBP(total ?? 0)}
           </div>
+
+          {cashTotal > 0 && (
+            <div className="flex items-center gap-4 mt-3 text-xs font-mono text-slate-500">
+              <span>Invested <span className="text-slate-300">{formatGBP(investedTotal)}</span></span>
+              <span className="text-slate-700">·</span>
+              <span>Cash <span className="text-slate-300">{formatGBP(cashTotal)}</span></span>
+            </div>
+          )}
 
           <div className="flex items-center gap-6 mt-6 pt-4 border-t border-slate-800">
             <div>

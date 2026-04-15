@@ -57,35 +57,53 @@ def _all_instrument_names() -> dict:
         pass
 
     # Fallback: paginate search endpoint — returns all instruments with display names.
-    # The search API ignores 'limit' param and defaults to pageSize=20; paginate instead.
+    # Fetch page 1 to discover totalItems, then fetch remaining pages in parallel.
     try:
-        name_map: dict = {}
-        page = 1
-        while True:
-            resp = requests.get(
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _fetch_page(page: int) -> list:
+            r = requests.get(
                 f"{ETORO_BASE_URL}/api/v1/market-data/search",
                 params={"text": "", "page": page, "pageSize": 500},
                 headers=_auth_headers(),
                 timeout=30,
             )
-            resp.raise_for_status()
-            body = resp.json()
-            items = body.get("items", [])
-            for inst in items:
-                iid = inst.get("internalInstrumentId")
-                if iid:
-                    name_map[iid] = (
-                        inst.get("internalInstrumentDisplayName")
-                        or inst.get("internalSymbolFull")
-                        or f"eToro #{iid}"
-                    )
-            total = body.get("totalItems", 0)
-            if len(name_map) >= total or not items:
-                break
-            page += 1
-            if page > 50:  # safety cap: 50 pages × 500 = 25000 instruments
-                break
-        return name_map
+            r.raise_for_status()
+            return r.json().get("items", [])
+
+        # Page 1 to learn total count
+        first_resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/market-data/search",
+            params={"text": "", "page": 1, "pageSize": 500},
+            headers=_auth_headers(), timeout=30,
+        )
+        first_resp.raise_for_status()
+        first_body = first_resp.json()
+        first_items = first_body.get("items", [])
+        total = first_body.get("totalItems", 0)
+        total_pages = max(1, -(-total // 500))  # ceiling division
+
+        all_items: list = list(first_items)
+
+        # Fetch remaining pages concurrently
+        if total_pages > 1:
+            with ThreadPoolExecutor(max_workers=8) as ex:
+                futures = {ex.submit(_fetch_page, p): p for p in range(2, total_pages + 1)}
+                for fut in as_completed(futures):
+                    try:
+                        all_items.extend(fut.result())
+                    except Exception:
+                        pass
+
+        return {
+            inst.get("internalInstrumentId"): (
+                inst.get("internalInstrumentDisplayName")
+                or inst.get("internalSymbolFull")
+                or f"eToro #{inst.get('internalInstrumentId', '?')}"
+            )
+            for inst in all_items
+            if inst.get("internalInstrumentId")
+        }
     except Exception:
         return {}
 
