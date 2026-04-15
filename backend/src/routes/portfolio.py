@@ -81,9 +81,10 @@ def portfolio_summary():
 
                 is_loading = False
 
-                if account_type == "t212":
+                if account_type in ("t212", "t212_invest"):
+                    t212_account = "invest" if account_type == "t212_invest" else "isa"
                     t212_tickers: set[str] = set()
-                    t212_positions = t212.fetch_portfolio_cached()
+                    t212_positions = t212.fetch_portfolio_cached(t212_account)
                     if t212_positions is None:
                         is_loading = True
                         t212_positions = []
@@ -109,7 +110,7 @@ def portfolio_summary():
                             holdings_out.append(holding_with_price_from_row(row))
 
                     # Append cash balance as a pseudo-holding
-                    cash = t212.fetch_cash_balance()
+                    cash = t212.fetch_cash_balance(t212_account)
                     if cash and cash.get("free", 0) > 0.01:
                         holdings_out.append(HoldingWithPrice(
                             id=0, account_id=account_id,

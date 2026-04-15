@@ -21,8 +21,15 @@ def _warmup_caches():
     def warm_t212():
         try:
             from src.providers import t212
-            t212._instrument_metadata()
-            t212.fetch_portfolio()
+            t212._instrument_metadata("isa")
+            t212.fetch_portfolio("isa")
+        except Exception:
+            pass
+        try:
+            from src.providers import t212
+            if t212._CREDS["invest"]["api_key"]:
+                t212._instrument_metadata("invest")
+                t212.fetch_portfolio("invest")
         except Exception:
             pass
 

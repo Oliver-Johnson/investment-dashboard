@@ -13,7 +13,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
   const [editingCash, setEditingCash] = useState(false);
   const [cashInput, setCashInput] = useState('');
 
-  const isManual = !['t212', 'etoro'].includes(account.account_type);
+  const isManual = !['t212', 't212_invest', 'etoro'].includes(account.account_type);
   const colour = account.colour || '#6366f1';
 
   const SUBTYPE_LABELS = {

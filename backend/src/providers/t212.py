@@ -6,28 +6,47 @@ from decimal import Decimal
 from functools import lru_cache
 from src.providers.yfinance_client import _get_gbpusd_rate
 
-# 5-minute portfolio cache to avoid slow repeated T212 API calls on every page load
-_portfolio_cache: dict = {"data": None, "expires": 0.0}
+# Credential sets: 'isa' and 'invest'
+_T212_LIVE_URL = "https://live.trading212.com/api/v0"
 
-T212_BASE_URL = os.getenv("T212_BASE_URL", "https://demo.trading212.com/api/v0")
-T212_API_KEY = os.getenv("T212_API_KEY", "")
-T212_API_SECRET = os.getenv("T212_API_SECRET", "")
+_CREDS = {
+    "isa": {
+        "base_url": os.getenv("T212_BASE_URL", _T212_LIVE_URL),
+        "api_key": os.getenv("T212_API_KEY", ""),
+        "api_secret": os.getenv("T212_API_SECRET", ""),
+    },
+    "invest": {
+        "base_url": os.getenv("T212_INVEST_BASE_URL", _T212_LIVE_URL),
+        "api_key": os.getenv("T212_INVEST_API_KEY", ""),
+        "api_secret": os.getenv("T212_INVEST_API_SECRET", ""),
+    },
+}
+
+# Backwards-compat aliases
+T212_BASE_URL = _CREDS["isa"]["base_url"]
+T212_API_KEY = _CREDS["isa"]["api_key"]
+T212_API_SECRET = _CREDS["isa"]["api_secret"]
+
+# Per-account caches
+_portfolio_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": None, "expires": 0.0}}
 
 
-def _auth_header() -> dict:
-    token = base64.b64encode(f"{T212_API_KEY}:{T212_API_SECRET}".encode()).decode()
+def _auth_header(account: str = "isa") -> dict:
+    creds = _CREDS[account]
+    token = base64.b64encode(f"{creds['api_key']}:{creds['api_secret']}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
 
 
-@lru_cache(maxsize=1)
-def _instrument_metadata() -> dict:
-    """Fetch T212 instrument metadata. Returns {ticker: {currency, name}} map."""
-    if not T212_API_KEY:
+@lru_cache(maxsize=2)
+def _instrument_metadata(account: str = "isa") -> dict:
+    """Fetch T212 instrument metadata for a given account (isa/invest)."""
+    creds = _CREDS[account]
+    if not creds["api_key"]:
         return {}
     try:
         resp = requests.get(
-            f"{T212_BASE_URL}/equity/metadata/instruments",
-            headers=_auth_header(),
+            f"{creds['base_url']}/equity/metadata/instruments",
+            headers=_auth_header(account),
             timeout=30,
         )
         resp.raise_for_status()
@@ -58,45 +77,46 @@ def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
     return price
 
 
-def fetch_portfolio_cached() -> list[dict] | None:
+def fetch_portfolio_cached(account: str = "isa") -> list[dict] | None:
     """Return cached portfolio data without blocking. Returns None if not ready yet."""
-    if _portfolio_cache["data"] is not None:
-        return _portfolio_cache["data"]
-    # Trigger a background fetch if not already running
-    if not _portfolio_cache.get("fetching"):
-        _portfolio_cache["fetching"] = True
+    cache = _portfolio_cache[account]
+    if cache["data"] is not None:
+        return cache["data"]
+    if not cache.get("fetching"):
+        cache["fetching"] = True
         import threading
-        threading.Thread(target=_do_fetch_portfolio, daemon=True).start()
+        threading.Thread(target=_do_fetch_portfolio, args=(account,), daemon=True).start()
     return None
 
 
-def _do_fetch_portfolio():
-    """Internal: fetch and populate cache, then clear fetching flag."""
+def _do_fetch_portfolio(account: str = "isa"):
     try:
-        fetch_portfolio()
+        fetch_portfolio(account)
     finally:
-        _portfolio_cache["fetching"] = False
+        _portfolio_cache[account]["fetching"] = False
 
 
-def fetch_portfolio() -> list[dict]:
+def fetch_portfolio(account: str = "isa") -> list[dict]:
     """Fetch T212 portfolio positions. Returns list of position dicts in GBP.
     Results are cached for 5 minutes to avoid slow repeated API calls."""
-    if not T212_API_KEY:
+    creds = _CREDS[account]
+    if not creds["api_key"]:
         return []
 
+    cache = _portfolio_cache[account]
     now = time.time()
-    if _portfolio_cache["data"] is not None and now < _portfolio_cache["expires"]:
-        return _portfolio_cache["data"]
+    if cache["data"] is not None and now < cache["expires"]:
+        return cache["data"]
 
-    headers = _auth_header()
+    headers = _auth_header(account)
     try:
-        resp = requests.get(f"{T212_BASE_URL}/equity/portfolio", headers=headers, timeout=15)
+        resp = requests.get(f"{creds['base_url']}/equity/portfolio", headers=headers, timeout=15)
         resp.raise_for_status()
     except requests.RequestException as e:
         raise RuntimeError(f"T212 API error: {e}") from e
 
     positions = resp.json()
-    metadata = _instrument_metadata()
+    metadata = _instrument_metadata(account)
     gbpusd_ref = [None]  # mutable cache for lazy GBPUSD fetch
     results = []
 
@@ -135,17 +155,18 @@ def fetch_portfolio() -> list[dict]:
             result["ppl_gbp"] = Decimal(str(ppl_gbp))
         results.append(result)
 
-    _portfolio_cache["data"] = results
-    _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
+    _portfolio_cache[account]["data"] = results
+    _portfolio_cache[account]["expires"] = time.time() + 300
     return results
 
 
-def fetch_cash_balance() -> dict | None:
+def fetch_cash_balance(account: str = "isa") -> dict | None:
     """Return T212 cash balance: {free, currency}. Returns None on error."""
-    if not T212_API_KEY:
+    creds = _CREDS[account]
+    if not creds["api_key"]:
         return None
     try:
-        resp = requests.get(f"{T212_BASE_URL}/equity/account/cash", headers=_auth_header(), timeout=10)
+        resp = requests.get(f"{creds['base_url']}/equity/account/cash", headers=_auth_header(account), timeout=10)
         resp.raise_for_status()
         data = resp.json()
         return {"free": float(data.get("free", 0)), "currency": data.get("currency", "GBP")}

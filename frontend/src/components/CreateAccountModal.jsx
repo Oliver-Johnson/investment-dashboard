@@ -15,9 +15,10 @@ const PRESET_COLOURS = [
 ];
 
 const ACCOUNT_TYPES = [
-  { value: 'manual', label: 'Manual' },
-  { value: 't212',   label: 'Trading 212' },
-  { value: 'etoro',  label: 'eToro' },
+  { value: 'manual',      label: 'Manual' },
+  { value: 't212',        label: 'Trading 212 ISA' },
+  { value: 't212_invest', label: 'Trading 212 Invest' },
+  { value: 'etoro',       label: 'eToro' },
 ];
 
 const SUBTYPES = [
