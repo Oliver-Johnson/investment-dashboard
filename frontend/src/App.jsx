@@ -4,6 +4,7 @@ import TotalValuePanel from './components/TotalValuePanel';
 import AccountCard from './components/AccountCard';
 import CreateAccountModal from './components/CreateAccountModal';
 import AddHoldingModal from './components/AddHoldingModal';
+import DividendPanel from './components/DividendPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -146,16 +147,23 @@ export default function App() {
               <div className="text-xs mt-1">Add an account to get started</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {accounts.map(account => (
-                <AccountCard
-                  key={account.id}
-                  account={account}
-                  onDataChanged={() => fetchData(true)}
-                  onAddHolding={setAddHoldingAccount}
-                />
-              ))}
-            </div>
+            <>
+              {accounts.length > 0 && (
+                <div className="mb-6">
+                  <DividendPanel accounts={accounts} />
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {accounts.map(account => (
+                  <AccountCard
+                    key={account.id}
+                    account={account}
+                    onDataChanged={() => fetchData(true)}
+                    onAddHolding={setAddHoldingAccount}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </main>

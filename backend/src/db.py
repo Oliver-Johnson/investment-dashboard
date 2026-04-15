@@ -61,6 +61,18 @@ def init_schema():
                     price_gbp DECIMAL(15,4),
                     last_fetched TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
+
+                CREATE TABLE IF NOT EXISTS dividends (
+                    id SERIAL PRIMARY KEY,
+                    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    ticker VARCHAR(20) NOT NULL,
+                    display_name VARCHAR(100),
+                    amount_gbp NUMERIC(20, 6) NOT NULL,
+                    ex_date DATE,
+                    pay_date DATE,
+                    notes TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
             """)
         conn.commit()
     finally:

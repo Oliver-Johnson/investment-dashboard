@@ -79,3 +79,25 @@ class AccountSummary(BaseModel):
 class PortfolioSummary(BaseModel):
     total_value_gbp: float
     accounts: List[AccountSummary]
+
+
+class DividendCreate(BaseModel):
+    account_id: int
+    ticker: str
+    display_name: Optional[str] = None
+    amount_gbp: float
+    ex_date: Optional[str] = None   # YYYY-MM-DD
+    pay_date: Optional[str] = None  # YYYY-MM-DD
+    notes: Optional[str] = None
+
+
+class Dividend(BaseModel):
+    id: int
+    account_id: int
+    ticker: str
+    display_name: Optional[str]
+    amount_gbp: float
+    ex_date: Optional[str]
+    pay_date: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
