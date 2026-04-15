@@ -103,9 +103,9 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
             </button>
 
             {expanded && (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-auto max-h-96">
                 <table className="w-full text-left">
-                  <thead>
+                  <thead className="sticky top-0 bg-slate-900 z-10">
                     <tr className="text-xs text-slate-600 uppercase tracking-wider">
                       <th className="pb-2 pl-3 pr-4 font-medium">Ticker</th>
                       <th className="pb-2 px-4 text-right font-medium">Units</th>
