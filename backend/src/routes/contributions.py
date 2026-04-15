@@ -76,9 +76,21 @@ def contribution_summary():
             )
             last_tax_year_gbp = float(cur.fetchone()["total"])
 
+            cur.execute(
+                """SELECT account_id, SUM(amount_gbp) AS total_gbp
+                   FROM contributions WHERE date BETWEEN %s AND %s
+                   GROUP BY account_id""",
+                (cur_start, cur_end),
+            )
+            by_account_current = [
+                {"account_id": row["account_id"], "total_gbp": float(row["total_gbp"])}
+                for row in cur.fetchall()
+            ]
+
     return {
         "total_gbp": total_gbp,
         "by_account": by_account,
+        "by_account_current_tax_year": by_account_current,
         "current_tax_year_gbp": current_tax_year_gbp,
         "last_tax_year_gbp": last_tax_year_gbp,
     }

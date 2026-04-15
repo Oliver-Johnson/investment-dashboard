@@ -50,11 +50,11 @@ export default function TotalValuePanel({ accounts, total }) {
       .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
   })).filter(g => g.value > 0);
 
-  // Allowance trackers — use actual current-tax-year contributions if available
+  // Allowance trackers — use current-tax-year contributions only
   function contribForSubtypes(subtypes) {
     if (!contribSummary) return null;
     const ids = new Set((accounts ?? []).filter(a => subtypes.includes(a.account_subtype)).map(a => a.id));
-    return (contribSummary.by_account ?? [])
+    return (contribSummary.by_account_current_tax_year ?? [])
       .filter(b => ids.has(b.account_id))
       .reduce((s, b) => s + b.total_gbp, 0);
   }
