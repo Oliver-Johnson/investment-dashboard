@@ -22,6 +22,14 @@ def _last_tax_year_bounds():
     return f"{sy}-04-06", f"{sy + 1}-04-05"
 
 
+def _serialize(row: dict) -> dict:
+    r = dict(row)
+    r["date"] = str(r["date"])
+    r["amount_gbp"] = float(r["amount_gbp"])
+    r["created_at"] = r["created_at"].isoformat() if r.get("created_at") else None
+    return r
+
+
 @router.get("")
 def list_contributions(account_id: int = None):
     with get_db() as conn:
@@ -33,16 +41,7 @@ def list_contributions(account_id: int = None):
                 )
             else:
                 cur.execute("SELECT * FROM contributions ORDER BY date DESC, created_at DESC")
-            cols = [d[0] for d in cur.description]
-            rows = cur.fetchall()
-    result = []
-    for row in rows:
-        r = dict(zip(cols, row))
-        r["date"] = str(r["date"])
-        r["amount_gbp"] = float(r["amount_gbp"])
-        r["created_at"] = r["created_at"].isoformat() if r["created_at"] else None
-        result.append(r)
-    return result
+            return [_serialize(row) for row in cur.fetchall()]
 
 
 @router.get("/summary")
@@ -52,8 +51,8 @@ def contribution_summary():
 
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COALESCE(SUM(amount_gbp), 0) FROM contributions")
-            total_gbp = float(cur.fetchone()[0])
+            cur.execute("SELECT COALESCE(SUM(amount_gbp), 0) AS total FROM contributions")
+            total_gbp = float(cur.fetchone()["total"])
 
             cur.execute("""
                 SELECT account_id, SUM(amount_gbp) AS total_gbp, COUNT(*) AS count
@@ -61,21 +60,21 @@ def contribution_summary():
                 GROUP BY account_id
             """)
             by_account = [
-                {"account_id": row[0], "total_gbp": float(row[1]), "count": row[2]}
+                {"account_id": row["account_id"], "total_gbp": float(row["total_gbp"]), "count": row["count"]}
                 for row in cur.fetchall()
             ]
 
             cur.execute(
-                "SELECT COALESCE(SUM(amount_gbp), 0) FROM contributions WHERE date BETWEEN %s AND %s",
+                "SELECT COALESCE(SUM(amount_gbp), 0) AS total FROM contributions WHERE date BETWEEN %s AND %s",
                 (cur_start, cur_end),
             )
-            current_tax_year_gbp = float(cur.fetchone()[0])
+            current_tax_year_gbp = float(cur.fetchone()["total"])
 
             cur.execute(
-                "SELECT COALESCE(SUM(amount_gbp), 0) FROM contributions WHERE date BETWEEN %s AND %s",
+                "SELECT COALESCE(SUM(amount_gbp), 0) AS total FROM contributions WHERE date BETWEEN %s AND %s",
                 (last_start, last_end),
             )
-            last_tax_year_gbp = float(cur.fetchone()[0])
+            last_tax_year_gbp = float(cur.fetchone()["total"])
 
     return {
         "total_gbp": total_gbp,
@@ -95,20 +94,13 @@ def create_contribution(body: ContributionCreate):
                    RETURNING *""",
                 body.dict(),
             )
-            cols = [d[0] for d in cur.description]
-            row = dict(zip(cols, cur.fetchone()))
-        conn.commit()
-    row["date"] = str(row["date"])
-    row["amount_gbp"] = float(row["amount_gbp"])
-    row["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
-    return row
+            return _serialize(cur.fetchone())
 
 
 @router.delete("/{contribution_id}", status_code=204)
 def delete_contribution(contribution_id: int):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM contributions WHERE id = %s", (contribution_id,))
-            if cur.rowcount == 0:
+            cur.execute("DELETE FROM contributions WHERE id = %s RETURNING id", (contribution_id,))
+            if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Contribution not found")
-        conn.commit()
