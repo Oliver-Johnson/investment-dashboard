@@ -28,14 +28,18 @@ def debug_etoro_instruments():
             headers=_etoro_headers(), timeout=15
         )
         port_resp.raise_for_status()
-        positions = port_resp.json().get("clientPortfolio", {}).get("positions", [])
+        portfolio = port_resp.json().get("clientPortfolio", {})
+        positions = portfolio.get("positions", [])
         ids = [p["instrumentID"] for p in positions[:2] if p.get("instrumentID")]
+        # Show raw fields of first position to see if name data is embedded
+        raw_first_position = {k: v for k, v in (positions[0].items() if positions else {}.items())}
     except Exception as e:
         return {"error": f"portfolio fetch failed: {e}"}
 
     results = {}
+    results["raw_first_position"] = raw_first_position
 
-    # Try 1: market-data/instruments
+    # Try 1: market-data/instruments (private API — returns 500 for individual keys)
     try:
         r = requests.get(
             f"{ETORO_BASE_URL}/api/v1/market-data/instruments",
@@ -46,38 +50,40 @@ def debug_etoro_instruments():
     except Exception as e:
         results["market-data/instruments"] = {"error": str(e)}
 
-    # Try 2: rates endpoint
+    # Try 2: eToro public web API (no auth required — used by etoro.com frontend)
     try:
         r = requests.get(
-            f"{ETORO_BASE_URL}/api/v1/market-data/instruments/rates",
-            params={"instrumentIds": ",".join(str(i) for i in ids)},
-            headers=_etoro_headers(), timeout=10
+            "https://www.etoro.com/api/instruments/v1.1/instruments",
+            params={"InstrumentIds": ",".join(str(i) for i in ids), "fields": "InstrumentDisplayName,SymbolFull"},
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=10
         )
-        results["market-data/rates"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:200]}
+        results["etoro-web-public-instruments"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:300]}
     except Exception as e:
-        results["market-data/rates"] = {"error": str(e)}
+        results["etoro-web-public-instruments"] = {"error": str(e)}
 
-    # Try 3: search endpoint (with auth)
+    # Try 3: eToro public rates API (no auth — tradable rates)
     try:
         r = requests.get(
-            f"{ETORO_BASE_URL}/api/v1/market-data/search",
-            params={"text": "Apple", "limit": 2},
-            headers=_etoro_headers(), timeout=10
+            "https://www.etoro.com/sapi/trade-data-real/live/public/tradables/rates",
+            params={"InstrumentIds": ",".join(str(i) for i in ids)},
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=10
         )
-        results["market-data/search"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:300]}
+        results["etoro-web-public-rates"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:300]}
     except Exception as e:
-        results["market-data/search"] = {"error": str(e)}
+        results["etoro-web-public-rates"] = {"error": str(e)}
 
-    # Try 4: feeds endpoint for first ID
-    if ids:
-        try:
-            r = requests.get(
-                f"{ETORO_BASE_URL}/api/v1/feeds/instrument/{ids[0]}",
-                headers=_etoro_headers(), timeout=10
-            )
-            results[f"feeds/instrument/{ids[0]}"] = {"status": r.status_code, "body": str(r.json())[:300] if r.ok else r.text[:200]}
-        except Exception as e:
-            results[f"feeds/instrument/{ids[0]}"] = {"error": str(e)}
+    # Try 4: eToro CDN metadata
+    try:
+        r = requests.get(
+            f"https://api.etorocdn.com/instruments/{ids[0] if ids else 0}",
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=10
+        )
+        results["etoro-cdn-instrument"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:300]}
+    except Exception as e:
+        results["etoro-cdn-instrument"] = {"error": str(e)}
 
     return {"ids_queried": ids, "results": results}
 

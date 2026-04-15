@@ -6,6 +6,9 @@ from decimal import Decimal
 from functools import lru_cache
 from src.providers.yfinance_client import _get_gbpusd_rate
 
+# 5-minute portfolio cache to avoid slow repeated T212 API calls on every page load
+_portfolio_cache: dict = {"data": None, "expires": 0.0}
+
 T212_BASE_URL = os.getenv("T212_BASE_URL", "https://demo.trading212.com/api/v0")
 T212_API_KEY = os.getenv("T212_API_KEY", "")
 T212_API_SECRET = os.getenv("T212_API_SECRET", "")
@@ -56,18 +59,21 @@ def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
 
 
 def fetch_portfolio() -> list[dict]:
-    """Fetch T212 portfolio positions. Returns list of position dicts in GBP."""
+    """Fetch T212 portfolio positions. Returns list of position dicts in GBP.
+    Results are cached for 5 minutes to avoid slow repeated API calls."""
     if not T212_API_KEY:
         return []
 
+    now = time.time()
+    if _portfolio_cache["data"] is not None and now < _portfolio_cache["expires"]:
+        return _portfolio_cache["data"]
+
     headers = _auth_header()
     try:
-        resp = requests.get(f"{T212_BASE_URL}/equity/portfolio", headers=headers, timeout=10)
+        resp = requests.get(f"{T212_BASE_URL}/equity/portfolio", headers=headers, timeout=15)
         resp.raise_for_status()
     except requests.RequestException as e:
         raise RuntimeError(f"T212 API error: {e}") from e
-
-    time.sleep(2)  # Rate limiting
 
     positions = resp.json()
     metadata = _instrument_metadata()
@@ -109,4 +115,6 @@ def fetch_portfolio() -> list[dict]:
             result["ppl_gbp"] = Decimal(str(ppl_gbp))
         results.append(result)
 
+    _portfolio_cache["data"] = results
+    _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
     return results

@@ -1,9 +1,13 @@
 import os
+import time
 import uuid
 import requests
 from decimal import Decimal
 from functools import lru_cache
 from src.providers.yfinance_client import _get_gbpusd_rate
+
+# 5-minute portfolio cache to avoid slow repeated eToro API calls
+_portfolio_cache: dict = {"data": None, "expires": 0.0}
 
 ETORO_BASE_URL = "https://public-api.etoro.com"
 ETORO_API_KEY = os.getenv("ETORO_API_KEY", "")    # Public API Key
@@ -21,46 +25,75 @@ def _auth_headers() -> dict:
 
 
 @lru_cache(maxsize=1)
-def _instrument_names(instrument_ids_tuple: tuple) -> dict:
-    """Fetch instrument display names. Returns {id: name}."""
-    if not instrument_ids_tuple:
-        return {}
-    ids_str = ",".join(str(i) for i in instrument_ids_tuple)
+def _all_instrument_names() -> dict:
+    """Fetch ALL eToro instrument names via search API. Returns {instrumentId(int): name}.
+
+    Primary: private market-data/instruments endpoint (500s for individual API keys).
+    Fallback: market-data/search with large pageSize — works with individual keys.
+    """
+    # Try private instruments API first
     try:
         resp = requests.get(
             f"{ETORO_BASE_URL}/api/v1/market-data/instruments",
-            params={"instrumentIds": ids_str},
             headers=_auth_headers(),
             timeout=15,
         )
         resp.raise_for_status()
         data = resp.json()
-        # Response wraps in instrumentDisplayDatas; field names use lowercase
         instruments = data.get("instrumentDisplayDatas", data if isinstance(data, list) else [])
+        if instruments:
+            return {
+                inst.get("instrumentId"): (
+                    inst.get("displayname")
+                    or inst.get("internalInstrumentDisplayName")
+                    or inst.get("internalSymbolFull")
+                    or f"eToro #{inst.get('instrumentId', '?')}"
+                )
+                for inst in instruments
+                if inst.get("instrumentId")
+            }
+    except Exception:
+        pass
+
+    # Fallback: search endpoint — returns all instruments with names
+    try:
+        resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/market-data/search",
+            params={"text": "", "pageSize": 15000},
+            headers=_auth_headers(),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
         return {
-            inst.get("instrumentId"): (
-                inst.get("displayname")
-                or inst.get("internalInstrumentDisplayName")
-                or inst.get("symbol")
+            inst.get("internalInstrumentId"): (
+                inst.get("internalInstrumentDisplayName")
                 or inst.get("internalSymbolFull")
-                or f"Instrument {inst.get('instrumentId', '?')}"
+                or f"eToro #{inst.get('internalInstrumentId', '?')}"
             )
-            for inst in instruments
-            if inst.get("instrumentId")
+            for inst in items
+            if inst.get("internalInstrumentId")
         }
     except Exception:
         return {}
 
 
+def _instrument_names(instrument_ids_tuple: tuple) -> dict:
+    """Look up names for specific instrument IDs from the cached full map."""
+    all_names = _all_instrument_names()
+    if not instrument_ids_tuple:
+        return all_names
+    return {iid: all_names.get(iid, f"eToro #{iid}") for iid in instrument_ids_tuple}
+
+
 def fetch_portfolio() -> list[dict]:
     """Fetch open positions from eToro. Returns list of normalised holding dicts.
-
-    Auth: x-api-key (Public API Key) + x-user-key (User Key)
-    Endpoint: GET /api/v1/trading/info/portfolio
-    Response: {clientPortfolio: {positions: [{instrumentID, units, amount, unitsBaseValueDollars, ...}]}}
-
-    All monetary values from eToro are in USD. Convert to GBP using GBPUSD rate.
+    Results are cached for 5 minutes to avoid slow repeated API calls.
     """
+    now = time.time()
+    if _portfolio_cache["data"] is not None and now < _portfolio_cache["expires"]:
+        return _portfolio_cache["data"]
+
     if not ETORO_API_KEY or not ETORO_USER_KEY:
         raise RuntimeError(
             "eToro credentials not configured. Set ETORO_API_KEY (public key) "
@@ -147,4 +180,6 @@ def fetch_portfolio() -> list[dict]:
                 "market_value_gbp": market_value_gbp,
             })
 
+    _portfolio_cache["data"] = results
+    _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
     return results
