@@ -57,16 +57,27 @@ def debug_etoro_instruments():
     except Exception as e:
         results["market-data/rates"] = {"error": str(e)}
 
-    # Try 3: public eToro static API (no auth needed)
+    # Try 3: search endpoint (with auth)
     try:
         r = requests.get(
-            "https://api.etorostatic.com/sapi/instrumentsExtended/instruments",
-            params={"InstrumentDataFilters": "IsMini", "SystemLanguageCode": "en-GB"},
-            timeout=10
+            f"{ETORO_BASE_URL}/api/v1/market-data/search",
+            params={"text": "Apple", "limit": 2},
+            headers=_etoro_headers(), timeout=10
         )
-        results["etorostatic/instruments"] = {"status": r.status_code, "sample_keys": list(r.json()[0].keys())[:10] if r.ok and r.json() else r.text[:200]}
+        results["market-data/search"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:300]}
     except Exception as e:
-        results["etorostatic/instruments"] = {"error": str(e)}
+        results["market-data/search"] = {"error": str(e)}
+
+    # Try 4: feeds endpoint for first ID
+    if ids:
+        try:
+            r = requests.get(
+                f"{ETORO_BASE_URL}/api/v1/feeds/instrument/{ids[0]}",
+                headers=_etoro_headers(), timeout=10
+            )
+            results[f"feeds/instrument/{ids[0]}"] = {"status": r.status_code, "body": str(r.json())[:300] if r.ok else r.text[:200]}
+        except Exception as e:
+            results[f"feeds/instrument/{ids[0]}"] = {"error": str(e)}
 
     return {"ids_queried": ids, "results": results}
 
