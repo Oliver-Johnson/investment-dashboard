@@ -76,9 +76,8 @@ def fetch_portfolio() -> list[dict]:
 
     for pos in positions:
         ticker = pos.get("ticker", "")
-        quantity_manual = Decimal(str(pos.get("quantity", 0)))
-        quantity_pie = Decimal(str(pos.get("pieQuantity", 0)))
-        quantity = quantity_manual + quantity_pie
+        # T212 `quantity` already includes pie holdings; `pieQuantity` is a subset
+        quantity = Decimal(str(pos.get("quantity", 0)))
         avg_price = Decimal(str(pos.get("averagePrice", 0)))
         current_price = Decimal(str(pos.get("currentPrice", 0)))
         ppl_gbp = pos.get("ppl")
