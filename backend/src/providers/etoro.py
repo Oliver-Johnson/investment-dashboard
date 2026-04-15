@@ -55,25 +55,36 @@ def _all_instrument_names() -> dict:
     except Exception:
         pass
 
-    # Fallback: search endpoint — returns all instruments with names
+    # Fallback: paginate search endpoint — returns all instruments with display names.
+    # The search API ignores 'limit' param and defaults to pageSize=20; paginate instead.
     try:
-        resp = requests.get(
-            f"{ETORO_BASE_URL}/api/v1/market-data/search",
-            params={"text": "", "pageSize": 15000},
-            headers=_auth_headers(),
-            timeout=30,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("items", [])
-        return {
-            inst.get("internalInstrumentId"): (
-                inst.get("internalInstrumentDisplayName")
-                or inst.get("internalSymbolFull")
-                or f"eToro #{inst.get('internalInstrumentId', '?')}"
+        name_map: dict = {}
+        page = 1
+        while True:
+            resp = requests.get(
+                f"{ETORO_BASE_URL}/api/v1/market-data/search",
+                params={"text": "", "page": page, "pageSize": 500},
+                headers=_auth_headers(),
+                timeout=30,
             )
-            for inst in items
-            if inst.get("internalInstrumentId")
-        }
+            resp.raise_for_status()
+            body = resp.json()
+            items = body.get("items", [])
+            for inst in items:
+                iid = inst.get("internalInstrumentId")
+                if iid:
+                    name_map[iid] = (
+                        inst.get("internalInstrumentDisplayName")
+                        or inst.get("internalSymbolFull")
+                        or f"eToro #{iid}"
+                    )
+            total = body.get("totalItems", 0)
+            if len(name_map) >= total or not items:
+                break
+            page += 1
+            if page > 50:  # safety cap: 50 pages × 500 = 25000 instruments
+                break
+        return name_map
     except Exception:
         return {}
 
@@ -104,10 +115,13 @@ def fetch_portfolio() -> list[dict]:
         resp = requests.get(
             f"{ETORO_BASE_URL}/api/v1/trading/info/portfolio",
             headers=_auth_headers(),
-            timeout=15,
+            timeout=20,
         )
         resp.raise_for_status()
     except requests.RequestException as e:
+        # On timeout/error, return stale cache if available rather than crashing
+        if _portfolio_cache["data"] is not None:
+            return _portfolio_cache["data"]
         raise RuntimeError(f"eToro API error: {e}")
 
     data = resp.json()

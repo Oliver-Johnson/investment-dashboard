@@ -34,7 +34,7 @@ def _instrument_metadata() -> dict:
         return {
             inst["ticker"]: {
                 "currency": inst.get("currencyCode", "GBP"),
-                "name": inst.get("shortName") or inst.get("name", ""),
+                "name": inst.get("name") or inst.get("fullName") or inst.get("shortName") or "",
             }
             for inst in resp.json()
         }
