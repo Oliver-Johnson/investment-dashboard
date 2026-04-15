@@ -38,6 +38,27 @@ export default function TotalValuePanel({ accounts, total }) {
       .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
   })).filter(g => g.value > 0);
 
+  // Allowance trackers (tax year limits)
+  const isaContributed = (accounts ?? [])
+    .filter(a => ['isa', 'cash_isa', 'lisa'].includes(a.account_subtype))
+    .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+  const lisaContributed = (accounts ?? [])
+    .filter(a => a.account_subtype === 'lisa')
+    .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+  const pensionContributed = (accounts ?? [])
+    .filter(a => a.account_subtype === 'sipp')
+    .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+
+  const ISA_LIMIT = 20000;
+  const LISA_LIMIT = 4000;
+  const PENSION_LIMIT = 60000;
+
+  const allowances = [
+    { label: 'ISA', contributed: isaContributed, limit: ISA_LIMIT, colour: 'bg-emerald-500' },
+    { label: 'LISA', contributed: lisaContributed, limit: LISA_LIMIT, colour: 'bg-violet-500' },
+    { label: 'Pension', contributed: pensionContributed, limit: PENSION_LIMIT, colour: 'bg-blue-500' },
+  ].filter(a => a.contributed > 0);
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
       <div className="flex items-start justify-between gap-8">
@@ -73,6 +94,35 @@ export default function TotalValuePanel({ accounts, total }) {
                   <span className="text-slate-300">{formatGBP(g.value)}</span>
                 </span>
               ))}
+            </div>
+          )}
+
+          {allowances.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <div className="text-xs text-slate-500 font-medium uppercase tracking-widest mb-3">Tax Year Allowances</div>
+              <div className="space-y-2.5">
+                {allowances.map(a => {
+                  const pct = Math.min(100, (a.contributed / a.limit) * 100);
+                  const remaining = Math.max(0, a.limit - a.contributed);
+                  return (
+                    <div key={a.label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-400 font-medium">{a.label}</span>
+                        <span className="font-mono text-slate-400">
+                          {formatGBP(a.contributed)} / {formatGBP(a.limit)}
+                          {remaining > 0 && <span className="text-slate-600"> · {formatGBP(remaining)} left</span>}
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${pct >= 100 ? 'bg-red-500' : a.colour}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
