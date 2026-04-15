@@ -21,7 +21,7 @@ def _etoro_headers():
 
 @router.get("/etoro-instruments")
 def debug_etoro_instruments():
-    """Return raw eToro instruments API response for first 2 IDs from portfolio."""
+    """Try multiple eToro instrument lookup methods and report which works."""
     try:
         port_resp = requests.get(
             f"{ETORO_BASE_URL}/api/v1/trading/info/portfolio",
@@ -30,18 +30,45 @@ def debug_etoro_instruments():
         port_resp.raise_for_status()
         positions = port_resp.json().get("clientPortfolio", {}).get("positions", [])
         ids = [p["instrumentID"] for p in positions[:2] if p.get("instrumentID")]
-        if not ids:
-            return {"error": "no positions found"}
+    except Exception as e:
+        return {"error": f"portfolio fetch failed: {e}"}
 
-        inst_resp = requests.get(
+    results = {}
+
+    # Try 1: market-data/instruments
+    try:
+        r = requests.get(
             f"{ETORO_BASE_URL}/api/v1/market-data/instruments",
             params={"instrumentIds": ",".join(str(i) for i in ids)},
-            headers=_etoro_headers(), timeout=15
+            headers=_etoro_headers(), timeout=10
         )
-        inst_resp.raise_for_status()
-        return {"raw": inst_resp.json(), "ids_queried": ids}
+        results["market-data/instruments"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:200]}
     except Exception as e:
-        return {"error": str(e)}
+        results["market-data/instruments"] = {"error": str(e)}
+
+    # Try 2: rates endpoint
+    try:
+        r = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/market-data/instruments/rates",
+            params={"instrumentIds": ",".join(str(i) for i in ids)},
+            headers=_etoro_headers(), timeout=10
+        )
+        results["market-data/rates"] = {"status": r.status_code, "body": r.json() if r.ok else r.text[:200]}
+    except Exception as e:
+        results["market-data/rates"] = {"error": str(e)}
+
+    # Try 3: public eToro static API (no auth needed)
+    try:
+        r = requests.get(
+            "https://api.etorostatic.com/sapi/instrumentsExtended/instruments",
+            params={"InstrumentDataFilters": "IsMini", "SystemLanguageCode": "en-GB"},
+            timeout=10
+        )
+        results["etorostatic/instruments"] = {"status": r.status_code, "sample_keys": list(r.json()[0].keys())[:10] if r.ok and r.json() else r.text[:200]}
+    except Exception as e:
+        results["etorostatic/instruments"] = {"error": str(e)}
+
+    return {"ids_queried": ids, "results": results}
 
 T212_BASE_URL = os.getenv("T212_BASE_URL", "https://demo.trading212.com/api/v0")
 T212_API_KEY = os.getenv("T212_API_KEY", "")
