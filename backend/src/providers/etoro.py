@@ -125,6 +125,23 @@ def _instrument_names(instrument_ids_tuple: tuple) -> dict:
     return {iid: all_names.get(iid, f"eToro #{iid}") for iid in instrument_ids_tuple}
 
 
+def fetch_portfolio_cached() -> list[dict] | None:
+    """Return cached portfolio data without blocking. Returns None if not ready yet."""
+    if _portfolio_cache["data"] is not None:
+        return _portfolio_cache["data"]
+    if not _portfolio_cache.get("fetching"):
+        _portfolio_cache["fetching"] = True
+        threading.Thread(target=_do_fetch_portfolio, daemon=True).start()
+    return None
+
+
+def _do_fetch_portfolio():
+    try:
+        fetch_portfolio()
+    finally:
+        _portfolio_cache["fetching"] = False
+
+
 def fetch_portfolio() -> list[dict]:
     """Fetch open positions from eToro. Returns list of normalised holding dicts.
     Results are cached for 5 minutes to avoid slow repeated API calls.

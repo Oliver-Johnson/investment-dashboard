@@ -75,10 +75,19 @@ export default function App() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // 60-second background refresh
   useEffect(() => {
     const interval = setInterval(() => fetchData(true), 60_000);
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  // Fast-poll (3s) while any account is still loading live data
+  const anyLoading = accounts.some(a => a.loading);
+  useEffect(() => {
+    if (!anyLoading) return;
+    const interval = setInterval(() => fetchData(true), 3_000);
+    return () => clearInterval(interval);
+  }, [anyLoading, fetchData]);
 
   const computedTotal = total ?? accounts.reduce(
     (sum, a) => sum + (a.total_value_gbp ?? a.holdings?.reduce(

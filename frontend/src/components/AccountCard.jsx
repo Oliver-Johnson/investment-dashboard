@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Building2, ChevronDown, ChevronUp, Trash2, Loader2 } from 'lucide-react';
 import HoldingRow, { formatGBP } from './HoldingRow';
 import FreshnessIndicator from './FreshnessIndicator';
 import EditHoldingModal from './EditHoldingModal';
@@ -104,8 +104,16 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
           </div>
         </div>
 
+        {/* Loading state while live API data is being fetched */}
+        {account.loading && (
+          <div className="px-5 py-4 flex items-center gap-2 text-xs text-slate-500 border-b border-slate-800/40">
+            <Loader2 size={12} className="animate-spin text-slate-600" />
+            Fetching live data…
+          </div>
+        )}
+
         {/* Holdings table */}
-        {account.holdings && account.holdings.length > 0 && (
+        {!account.loading && account.holdings && account.holdings.length > 0 && (
           <div>
             <button
               onClick={() => setExpanded(e => !e)}

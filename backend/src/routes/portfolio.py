@@ -79,12 +79,13 @@ def portfolio_summary():
 
                 holdings_out: list[HoldingWithPrice] = []
 
+                is_loading = False
+
                 if account_type == "t212":
-                    # Get live positions from T212
                     t212_tickers: set[str] = set()
-                    try:
-                        t212_positions = t212.fetch_portfolio()
-                    except Exception:
+                    t212_positions = t212.fetch_portfolio_cached()
+                    if t212_positions is None:
+                        is_loading = True
                         t212_positions = []
 
                     for pos in t212_positions:
@@ -119,24 +120,11 @@ def portfolio_summary():
                         ))
 
                 elif account_type == "etoro":
-                    # Get live positions from eToro API
                     etoro_tickers: set[str] = set()
-                    try:
-                        etoro_positions = etoro.fetch_portfolio()
-                    except Exception as e:
+                    etoro_positions = etoro.fetch_portfolio_cached()
+                    if etoro_positions is None:
+                        is_loading = True
                         etoro_positions = []
-                        holdings_out.append(HoldingWithPrice(
-                            id=0,
-                            account_id=account_id,
-                            ticker="ERROR",
-                            display_name=f"eToro fetch failed: {e}",
-                            unit_count=0,
-                            currency="GBP",
-                            price_gbp=None,
-                            value_gbp=None,
-                            last_holding_update=now,
-                            freshness="red",
-                        ))
 
                     for pos in etoro_positions:
                         etoro_tickers.add(pos["ticker"])
@@ -207,6 +195,7 @@ def portfolio_summary():
                     holdings=holdings_out,
                     freshness=account_freshness,
                     last_updated=last_updated,
+                    loading=is_loading,
                 ))
 
     return PortfolioSummary(

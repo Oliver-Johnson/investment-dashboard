@@ -64,6 +64,7 @@ class AccountSummary(BaseModel):
     holdings: List[HoldingWithPrice]
     freshness: Optional[str]  # worst freshness across holdings (manual accounts only)
     last_updated: datetime
+    loading: bool = False  # True while live API data is being fetched in background
 
 
 class PortfolioSummary(BaseModel):

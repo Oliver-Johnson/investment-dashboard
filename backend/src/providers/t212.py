@@ -58,6 +58,26 @@ def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
     return price
 
 
+def fetch_portfolio_cached() -> list[dict] | None:
+    """Return cached portfolio data without blocking. Returns None if not ready yet."""
+    if _portfolio_cache["data"] is not None:
+        return _portfolio_cache["data"]
+    # Trigger a background fetch if not already running
+    if not _portfolio_cache.get("fetching"):
+        _portfolio_cache["fetching"] = True
+        import threading
+        threading.Thread(target=_do_fetch_portfolio, daemon=True).start()
+    return None
+
+
+def _do_fetch_portfolio():
+    """Internal: fetch and populate cache, then clear fetching flag."""
+    try:
+        fetch_portfolio()
+    finally:
+        _portfolio_cache["fetching"] = False
+
+
 def fetch_portfolio() -> list[dict]:
     """Fetch T212 portfolio positions. Returns list of position dicts in GBP.
     Results are cached for 5 minutes to avoid slow repeated API calls."""
