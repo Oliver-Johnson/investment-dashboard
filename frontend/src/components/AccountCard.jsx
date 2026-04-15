@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Building2, ChevronDown, ChevronUp, Trash2, Loader2 } from 'lucide-react';
+import { Building2, ChevronDown, ChevronUp, Trash2, Loader2, Pencil } from 'lucide-react';
 import HoldingRow, { formatGBP } from './HoldingRow';
 import FreshnessIndicator from './FreshnessIndicator';
 import EditHoldingModal from './EditHoldingModal';
+import EditAccountModal from './EditAccountModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function AccountCard({ account, onDataChanged, onAddHolding }) {
   const [editingHolding, setEditingHolding] = useState(null);
+  const [editingAccount, setEditingAccount] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [editingCash, setEditingCash] = useState(false);
@@ -81,7 +83,16 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                 <Building2 size={16} style={{ color: colour }} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">{account.name}</h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-sm font-semibold text-slate-100">{account.name}</h3>
+                  <button
+                    onClick={() => setEditingAccount(true)}
+                    className="p-0.5 rounded hover:bg-slate-700 text-slate-600 hover:text-slate-400 transition-colors"
+                    title="Edit account"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border font-medium ${
                     isManual
@@ -226,6 +237,14 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
         onClose={() => setEditingHolding(null)}
         onSaved={onDataChanged}
       />
+
+      {editingAccount && (
+        <EditAccountModal
+          account={account}
+          onClose={() => setEditingAccount(false)}
+          onSaved={() => { setEditingAccount(false); onDataChanged(); }}
+        />
+      )}
     </>
   );
 }
