@@ -11,10 +11,12 @@ ETORO_USER_KEY = os.getenv("ETORO_USER_KEY", "") or os.getenv("ETORO_USERNAME", 
 
 
 def _auth_headers() -> dict:
+    # eToro's header naming is counterintuitive:
+    # x-api-key expects the private/user key; x-user-key expects the public key
     return {
         "x-request-id": str(uuid.uuid4()),
-        "x-api-key": ETORO_API_KEY,
-        "x-user-key": ETORO_USER_KEY,
+        "x-api-key": ETORO_USER_KEY,
+        "x-user-key": ETORO_API_KEY,
     }
 
 
