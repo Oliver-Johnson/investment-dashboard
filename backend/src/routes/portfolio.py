@@ -156,7 +156,14 @@ def portfolio_summary():
                         avg_cost_gbp = float(pos["avg_price_gbp"]) if pos.get("avg_price_gbp") else None
                         gain_loss_gbp = None
                         gain_loss_pct = None
-                        if avg_cost_gbp and price_gbp and unit_count > 0:
+                        # Prefer eToro's direct netProfit field (USD P&L already converted to GBP).
+                        # Fall back to (price - avg_cost) * qty for positions without netProfit.
+                        if pos.get("net_profit_gbp") is not None:
+                            gain_loss_gbp = float(pos["net_profit_gbp"])
+                            market_val = float(pos["market_value_gbp"]) if pos.get("market_value_gbp") else None
+                            cost_basis = (market_val - gain_loss_gbp) if market_val is not None else None
+                            gain_loss_pct = (gain_loss_gbp / cost_basis) * 100 if cost_basis else None
+                        elif avg_cost_gbp and price_gbp and unit_count > 0:
                             cost_basis = avg_cost_gbp * unit_count
                             gain_loss_gbp = (price_gbp - avg_cost_gbp) * unit_count
                             gain_loss_pct = (gain_loss_gbp / cost_basis) * 100 if cost_basis else None

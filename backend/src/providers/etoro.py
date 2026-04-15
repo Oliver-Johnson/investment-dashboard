@@ -96,14 +96,18 @@ def _all_instrument_names() -> dict:
                     except Exception:
                         pass
 
+        # Portfolio positions use instrumentID (numeric); search results expose this
+        # as either "instrumentId" (no "internal" prefix) or "internalInstrumentId".
+        # Prefer plain instrumentId so the key space matches portfolio's instrumentID.
         return {
-            inst.get("internalInstrumentId"): (
+            (inst.get("instrumentId") or inst.get("internalInstrumentId")): (
                 inst.get("internalInstrumentDisplayName")
+                or inst.get("displayName")
                 or inst.get("internalSymbolFull")
-                or f"eToro #{inst.get('internalInstrumentId', '?')}"
+                or f"eToro #{inst.get('instrumentId', inst.get('internalInstrumentId', '?'))}"
             )
             for inst in all_items
-            if inst.get("internalInstrumentId")
+            if (inst.get("instrumentId") or inst.get("internalInstrumentId"))
         }
     except Exception:
         return {}
@@ -219,6 +223,12 @@ def fetch_portfolio() -> list[dict]:
         open_rate = Decimal(str(pos.get("openRate") or 0))
         avg_price_gbp = (open_rate / gbpusd) if open_rate > 0 else None
 
+        # eToro exposes realised+unrealised P&L directly as netProfit (USD).
+        # Use it when available — more reliable than recomputing from openRate,
+        # especially for leveraged/CFD positions.
+        raw_profit = pos.get("netProfit") or pos.get("profit") or pos.get("pnl")
+        net_profit_gbp = (Decimal(str(raw_profit)) / gbpusd) if raw_profit is not None else None
+
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
         ticker = str(instrument_id)  # eToro uses numeric IDs, not tickers
 
@@ -230,6 +240,7 @@ def fetch_portfolio() -> list[dict]:
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
             "avg_price_gbp": avg_price_gbp,
+            "net_profit_gbp": net_profit_gbp,
         })
 
     # Also include copytrade (mirror) positions
@@ -244,6 +255,8 @@ def fetch_portfolio() -> list[dict]:
             current_price_gbp = price_usd / gbpusd
             open_rate = Decimal(str(pos.get("openRate") or 0))
             avg_price_gbp = (open_rate / gbpusd) if open_rate > 0 else None
+            raw_profit = pos.get("netProfit") or pos.get("profit") or pos.get("pnl")
+            net_profit_gbp = (Decimal(str(raw_profit)) / gbpusd) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
             results.append({
                 "ticker": str(instrument_id),
@@ -253,6 +266,7 @@ def fetch_portfolio() -> list[dict]:
                 "current_price_gbp": current_price_gbp,
                 "market_value_gbp": market_value_gbp,
                 "avg_price_gbp": avg_price_gbp,
+                "net_profit_gbp": net_profit_gbp,
             })
 
     _portfolio_cache["data"] = results

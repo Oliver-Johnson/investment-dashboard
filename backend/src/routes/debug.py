@@ -127,6 +127,52 @@ def debug_etoro_instruments():
 
     return {"ids_queried": ids, "results": results}
 
+@router.get("/etoro-positions-raw")
+def etoro_positions_raw():
+    """Show raw eToro position data to inspect field names and values."""
+    from src.providers import etoro
+    positions = etoro.fetch_portfolio_cached()
+    if positions is None:
+        # Not cached yet — trigger a blocking fetch
+        try:
+            positions = etoro.fetch_portfolio()
+        except Exception as e:
+            return {"error": str(e)}
+    if not positions:
+        return {"error": "No positions cached yet"}
+    # Return first 3 positions with all their fields
+    return positions[:3]
+
+
+@router.get("/etoro-positions-raw-api")
+def etoro_positions_raw_api():
+    """Show RAW eToro API position objects (before normalization) to inspect field names."""
+    try:
+        resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/trading/info/portfolio",
+            headers=_etoro_headers(), timeout=20
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        cp = data.get("clientPortfolio", {})
+        positions = cp.get("positions", [])
+        return {"positions_raw": positions[:3], "all_keys_in_first": list(positions[0].keys()) if positions else []}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/etoro-name-lookup")
+def etoro_name_lookup():
+    """Show first 10 entries from the cached instrument names map."""
+    from src.providers.etoro import _all_instrument_names
+    cache_info = _all_instrument_names.cache_info()
+    if cache_info.currsize == 0:
+        return {"status": "cache_not_populated", "note": "Call /api/debug/etoro-positions-raw first to warm cache"}
+    names = _all_instrument_names()
+    first_10 = dict(list(names.items())[:10])
+    return {"total_entries": len(names), "first_10": first_10, "sample_key_types": str(type(list(names.keys())[0])) if names else "empty"}
+
+
 T212_BASE_URL = os.getenv("T212_BASE_URL", "https://demo.trading212.com/api/v0")
 T212_API_KEY = os.getenv("T212_API_KEY", "")
 T212_API_SECRET = os.getenv("T212_API_SECRET", "")
