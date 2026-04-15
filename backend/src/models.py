@@ -12,6 +12,7 @@ class AccountCreate(BaseModel):
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     colour: Optional[str] = None
+    cash_balance_gbp: Optional[float] = None
 
 
 class Account(BaseModel):
@@ -19,6 +20,7 @@ class Account(BaseModel):
     name: str
     account_type: str
     colour: str
+    cash_balance_gbp: Optional[float] = None
     created_at: datetime
 
 

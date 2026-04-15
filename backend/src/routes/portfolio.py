@@ -174,6 +174,17 @@ def portfolio_summary():
                     for row in db_holdings:
                         holdings_out.append(holding_with_price_from_row(row))
 
+                # Manual cash balance (user-set, for accounts where API doesn't expose it e.g. eToro GBP)
+                manual_cash = account.get("cash_balance_gbp")
+                if manual_cash and float(manual_cash) > 0.01:
+                    holdings_out.append(HoldingWithPrice(
+                        id=0, account_id=account_id,
+                        ticker="CASH_GBP", display_name="Cash Balance (GBP)",
+                        unit_count=1.0, currency="GBP",
+                        price_gbp=float(manual_cash), value_gbp=float(manual_cash),
+                        last_holding_update=now, freshness="green",
+                    ))
+
                 account_total = sum(h.value_gbp or 0.0 for h in holdings_out)
                 total_value += account_total
 

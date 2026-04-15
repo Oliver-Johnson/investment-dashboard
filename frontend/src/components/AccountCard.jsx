@@ -10,6 +10,8 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
   const [editingHolding, setEditingHolding] = useState(null);
   const [expanded, setExpanded] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [editingCash, setEditingCash] = useState(false);
+  const [cashInput, setCashInput] = useState('');
 
   const isManual = !['t212', 'etoro'].includes(account.account_type);
   const colour = account.colour || '#6366f1';
@@ -18,6 +20,17 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
     (sum, h) => sum + (h.unit_count ?? 0) * (h.current_price ?? 0),
     0
   ) ?? 0;
+
+  async function handleSaveCash() {
+    const val = parseFloat(cashInput);
+    await fetch(`${API_URL}/api/accounts/${account.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cash_balance_gbp: isNaN(val) ? null : val }),
+    });
+    setEditingCash(false);
+    onDataChanged();
+  }
 
   async function handleDeleteAccount() {
     if (!confirm(`Delete account "${account.name}"? This cannot be undone.`)) return;
@@ -131,19 +144,43 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
           </div>
         )}
 
-        {/* Footer: empty state + add holding */}
-        <div className="px-5 py-3 flex items-center justify-between border-t border-slate-800/40">
-          {(!account.holdings || account.holdings.length === 0) ? (
-            <span className="text-xs text-slate-600">No holdings</span>
-          ) : (
-            <span />
-          )}
-          <button
-            onClick={() => onAddHolding(account)}
-            className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
-          >
-            + Add holding
-          </button>
+        {/* Footer: cash balance + add holding */}
+        <div className="px-5 py-3 border-t border-slate-800/40 space-y-2">
+          {/* Manual GBP cash balance row (shown for all account types) */}
+          <div className="flex items-center justify-between">
+            {editingCash ? (
+              <div className="flex items-center gap-2 flex-1">
+                <span className="text-xs text-slate-400">GBP Cash £</span>
+                <input
+                  type="number"
+                  value={cashInput}
+                  onChange={e => setCashInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveCash(); if (e.key === 'Escape') setEditingCash(false); }}
+                  autoFocus
+                  step="0.01"
+                  min="0"
+                  className="w-28 px-2 py-0.5 bg-slate-800 border border-slate-600 rounded text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500"
+                />
+                <button onClick={handleSaveCash} className="text-xs text-emerald-400 hover:text-emerald-300 px-1">Save</button>
+                <button onClick={() => setEditingCash(false)} className="text-xs text-slate-500 hover:text-slate-400 px-1">Cancel</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setCashInput(account.cash_balance_gbp != null ? String(account.cash_balance_gbp) : ''); setEditingCash(true); }}
+                className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+              >
+                {account.cash_balance_gbp > 0
+                  ? `GBP Cash: ${formatGBP(account.cash_balance_gbp)}`
+                  : '+ Set GBP cash balance'}
+              </button>
+            )}
+            <button
+              onClick={() => onAddHolding(account)}
+              className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+            >
+              + Add holding
+            </button>
+          </div>
         </div>
       </div>
 
