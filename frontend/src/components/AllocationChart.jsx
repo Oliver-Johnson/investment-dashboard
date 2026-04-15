@@ -15,7 +15,7 @@ const CustomTooltip = ({ active, payload }) => {
   const name = item.name ?? item.payload?.name ?? '';
   const value = item.value ?? 0;
   // recharts may put percent on payload directly or on payload.payload
-  const pct = item.percent ?? item.payload?.percent ?? 0;
+  const pct = item.payload?.percent ?? item.percent ?? 0;
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 shadow-xl text-xs">
       <div className="font-semibold text-slate-200">{name}</div>
@@ -75,13 +75,15 @@ export default function AllocationChart({ accounts }) {
   if (!data.length) return null;
 
   const total = data.reduce((s, d) => s + d.value, 0);
+  // Pre-attach percent so it's always available on item.payload in the tooltip
+  const dataWithPercent = data.map(d => ({ ...d, percent: d.value / total }));
 
   return (
     <div className="h-full flex flex-col">
       <ResponsiveContainer width="100%" height={220}>
         <PieChart>
           <Pie
-            data={data}
+            data={dataWithPercent}
             cx="50%"
             cy="50%"
             innerRadius={60}
@@ -98,10 +100,10 @@ export default function AllocationChart({ accounts }) {
         </PieChart>
       </ResponsiveContainer>
       <CustomLegend
-        payload={data.map(d => ({
+        payload={dataWithPercent.map(d => ({
           value: d.name,
           color: d.colour,
-          payload: { percent: d.value / total },
+          payload: { percent: d.percent },
         }))}
       />
     </div>
