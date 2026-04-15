@@ -1,77 +1,118 @@
 import os
+import uuid
 import requests
 from decimal import Decimal
+from functools import lru_cache
 from src.providers.yfinance_client import _get_gbpusd_rate
 
-ETORO_BASE_URL = os.getenv("ETORO_BASE_URL", "https://api.etoro.com/api")
-ETORO_API_KEY = os.getenv("ETORO_API_KEY", "")
-ETORO_USERNAME = os.getenv("ETORO_USERNAME", "")
+ETORO_BASE_URL = "https://public-api.etoro.com"
+ETORO_API_KEY = os.getenv("ETORO_API_KEY", "")    # Public API Key
+ETORO_USER_KEY = os.getenv("ETORO_USER_KEY", "") or os.getenv("ETORO_USERNAME", "")  # User Key
 
 
-def _auth_header() -> dict:
-    return {"Authorization": f"Bearer {ETORO_API_KEY}"}
+def _auth_headers() -> dict:
+    return {
+        "x-request-id": str(uuid.uuid4()),
+        "x-api-key": ETORO_API_KEY,
+        "x-user-key": ETORO_USER_KEY,
+    }
+
+
+@lru_cache(maxsize=1)
+def _instrument_names(instrument_ids_tuple: tuple) -> dict:
+    """Fetch instrument names for a tuple of instrument IDs. Returns {id: name}."""
+    if not instrument_ids_tuple:
+        return {}
+    ids_str = ",".join(str(i) for i in instrument_ids_tuple)
+    try:
+        resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/market-data/instruments",
+            params={"instrumentIds": ids_str},
+            headers=_auth_headers(),
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        instruments = data if isinstance(data, list) else data.get("instruments", [])
+        return {
+            inst.get("instrumentID") or inst.get("InstrumentID"): (
+                inst.get("instrumentDisplayName")
+                or inst.get("instrumentName")
+                or inst.get("symbolFull")
+                or inst.get("ticker")
+                or f"Instrument {inst.get('instrumentID', '?')}"
+            )
+            for inst in instruments
+            if inst.get("instrumentID") or inst.get("InstrumentID")
+        }
+    except Exception:
+        return {}
 
 
 def fetch_portfolio() -> list[dict]:
-    """Fetch open positions from eToro and return normalised holding dicts.
+    """Fetch open positions from eToro. Returns list of normalised holding dicts.
 
-    Returns a list of dicts with keys:
-        ticker, display_name, quantity, currency,
-        current_price_gbp, market_value_gbp
+    Auth: x-api-key (Public API Key) + x-user-key (User Key)
+    Endpoint: GET /api/v1/trading/info/portfolio
+    Response: {clientPortfolio: {positions: [{instrumentID, units, amount, unitsBaseValueDollars, ...}]}}
 
-    TODO: verify the exact endpoint path and response field names against the
-    eToro API docs for your account type. The structure below matches the
-    public/partner REST API pattern — adjust field names if needed.
+    All monetary values from eToro are in USD. Convert to GBP using GBPUSD rate.
     """
-    if not ETORO_API_KEY or not ETORO_USERNAME:
-        raise RuntimeError("eToro API credentials not configured (ETORO_API_KEY, ETORO_USERNAME)")
+    if not ETORO_API_KEY or not ETORO_USER_KEY:
+        raise RuntimeError(
+            "eToro credentials not configured. Set ETORO_API_KEY (public key) "
+            "and ETORO_USER_KEY (user key) in .env"
+        )
 
-    # TODO: confirm this path is correct for your eToro API tier
-    url = f"{ETORO_BASE_URL}/user/v1/users/{ETORO_USERNAME}/portfolio"
     try:
-        resp = requests.get(url, headers=_auth_header(), timeout=10)
+        resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/trading/info/portfolio",
+            headers=_auth_headers(),
+            timeout=15,
+        )
         resp.raise_for_status()
     except requests.RequestException as e:
         raise RuntimeError(f"eToro API error: {e}")
 
     data = resp.json()
+    positions = (
+        data.get("clientPortfolio", {}).get("positions", [])
+        or data.get("positions", [])
+    )
 
-    # TODO: adjust the top-level key if the response wraps positions differently
-    # e.g. data["positions"], data["openPositions"], data["portfolio"], etc.
-    positions = data.get("positions", data.get("openPositions", []))
+    if not positions:
+        return []
 
-    gbpusd = None
+    # Fetch instrument names in one batch call
+    instrument_ids = tuple(sorted({pos.get("instrumentID") for pos in positions if pos.get("instrumentID")}))
+    names = _instrument_names(instrument_ids)
+
+    gbpusd = Decimal(str(_get_gbpusd_rate()))
     results = []
+
     for pos in positions:
-        # TODO: confirm field names — eToro may use "instrumentID", "ticker",
-        # "symbol", or "isin" for the instrument identifier
-        ticker = pos.get("ticker") or pos.get("instrumentID") or pos.get("symbol", "")
-        display_name = pos.get("instrumentName") or pos.get("displayName")
+        instrument_id = pos.get("instrumentID", 0)
+        units = Decimal(str(pos.get("units", 0)))
+        # amount = current USD value of position; unitsBaseValueDollars = unit-level value
+        value_usd = Decimal(str(
+            pos.get("amount")
+            or pos.get("unitsBaseValueDollars", 0)
+            or 0
+        ))
+        # Derive price per unit from value / units (avoid div by zero)
+        price_usd = (value_usd / units) if units else Decimal("0")
 
-        # TODO: confirm quantity field name ("units", "amount", "quantity")
-        quantity = Decimal(str(pos.get("units") or pos.get("amount") or pos.get("quantity", 0)))
+        market_value_gbp = value_usd / gbpusd
+        current_price_gbp = price_usd / gbpusd
 
-        # TODO: confirm price field name ("currentRate", "currentPrice", "rate")
-        current_price = Decimal(str(pos.get("currentRate") or pos.get("currentPrice") or pos.get("rate", 0)))
-
-        # eToro typically quotes in USD; adjust if your account is GBP-denominated
-        currency = pos.get("currency", "USD")
-        market_value = quantity * current_price
-
-        if currency == "USD":
-            if gbpusd is None:
-                gbpusd = Decimal(str(_get_gbpusd_rate()))
-            market_value_gbp = market_value / gbpusd
-            current_price_gbp = current_price / gbpusd
-        else:
-            market_value_gbp = market_value
-            current_price_gbp = current_price
+        display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
+        ticker = str(instrument_id)  # eToro uses numeric IDs, not tickers
 
         results.append({
             "ticker": ticker,
             "display_name": display_name,
-            "quantity": quantity,
-            "currency": currency,
+            "quantity": units,
+            "currency": "USD",
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
         })
