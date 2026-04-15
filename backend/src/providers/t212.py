@@ -3,6 +3,7 @@ import os
 import time
 import requests
 from decimal import Decimal
+from functools import lru_cache
 from src.providers.yfinance_client import _get_gbpusd_rate
 
 T212_BASE_URL = os.getenv("T212_BASE_URL", "https://demo.trading212.com/api/v0")
@@ -13,6 +14,40 @@ T212_API_SECRET = os.getenv("T212_API_SECRET", "")
 def _auth_header() -> dict:
     token = base64.b64encode(f"{T212_API_KEY}:{T212_API_SECRET}".encode()).decode()
     return {"Authorization": f"Basic {token}"}
+
+
+@lru_cache(maxsize=1)
+def _instrument_currencies() -> dict:
+    """Fetch T212 instrument metadata and return {ticker: currencyCode} map.
+    Cached in memory — restarts clear the cache."""
+    if not T212_API_KEY:
+        return {}
+    try:
+        resp = requests.get(
+            f"{T212_BASE_URL}/equity/metadata/instruments",
+            headers=_auth_header(),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return {inst["ticker"]: inst.get("currencyCode", "GBP") for inst in resp.json()}
+    except Exception:
+        return {}
+
+
+def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
+    """Convert a price in `currency` to GBP. gbpusd_ref is a 1-element list used
+    as a mutable cache so we only fetch GBPUSD once per portfolio call."""
+    if currency == "GBP":
+        return price
+    if currency == "GBX":
+        # Pence → pounds
+        return price / 100
+    if currency == "USD":
+        if not gbpusd_ref[0]:
+            gbpusd_ref[0] = Decimal(str(_get_gbpusd_rate()))
+        return price / gbpusd_ref[0]
+    # Unknown currency — return as-is
+    return price
 
 
 def fetch_portfolio() -> list[dict]:
@@ -30,35 +65,28 @@ def fetch_portfolio() -> list[dict]:
     time.sleep(2)  # Rate limiting
 
     positions = resp.json()
+    currencies = _instrument_currencies()
+    gbpusd_ref = [None]  # mutable cache for lazy GBPUSD fetch
     results = []
-
-    gbpusd = None
 
     for pos in positions:
         ticker = pos.get("ticker", "")
         quantity = Decimal(str(pos.get("quantity", 0)))
         avg_price = Decimal(str(pos.get("averagePrice", 0)))
         current_price = Decimal(str(pos.get("currentPrice", 0)))
-        # T212 may not include currency per position; derive from ticker
-        currency = pos.get("currency")
-        if not currency:
-            currency = "USD" if "_US_" in ticker else "GBP"
-        ppl_gbp = pos.get("ppl")  # profit/loss in account currency (GBP)
-        market_value = quantity * current_price
+        ppl_gbp = pos.get("ppl")
 
-        if currency == "USD":
-            if gbpusd is None:
-                gbpusd = Decimal(str(_get_gbpusd_rate()))
-            market_value_gbp = market_value / gbpusd
-            current_price_gbp = current_price / gbpusd
-        else:
-            market_value_gbp = market_value
-            current_price_gbp = current_price
+        # Use instrument metadata for currency; fall back to ticker heuristic
+        currency = currencies.get(ticker) or ("USD" if "_US_" in ticker else "GBP")
+
+        current_price_gbp = _price_to_gbp(current_price, currency, gbpusd_ref)
+        avg_price_gbp = _price_to_gbp(avg_price, currency, gbpusd_ref)
+        market_value_gbp = quantity * current_price_gbp
 
         result = {
             "ticker": ticker,
             "quantity": quantity,
-            "avg_price": avg_price,
+            "avg_price": avg_price_gbp,
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
         }
