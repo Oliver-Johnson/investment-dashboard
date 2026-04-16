@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Plus, Tag, X } from 'lucide-react';
 import Masonry from 'react-masonry-css';
+import { screens } from '../config/breakpoints.js';
 import NoteCard from './NoteCard';
 import NoteEditor from './NoteEditor';
 
@@ -157,7 +158,7 @@ export default function NotesPage({ accounts }) {
       {/* Content */}
       {loading ? (
         <Masonry
-          breakpointCols={{ default: 3, 1280: 3, 768: 2, 0: 1 }}
+          breakpointCols={{ default: 3, [screens.xl]: 3, [screens.md]: 2, 0: 1 }}
           className="flex gap-4"
           columnClassName="flex flex-col gap-4"
         >
@@ -177,7 +178,7 @@ export default function NotesPage({ accounts }) {
         </div>
       ) : (
         <Masonry
-          breakpointCols={{ default: 3, 1280: 3, 768: 2, 0: 1 }}
+          breakpointCols={{ default: 3, [screens.xl]: 3, [screens.md]: 2, 0: 1 }}
           className="flex gap-4"
           columnClassName="flex flex-col gap-4"
         >
