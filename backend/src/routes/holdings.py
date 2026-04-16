@@ -21,13 +21,22 @@ def list_holdings(account_id: int = None):
 
 @router.post("", status_code=201)
 def create_holding(body: HoldingCreate):
+    data = body.model_dump()
+    data["ticker"] = data["ticker"].lower()
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO holdings (account_id, ticker, display_name, unit_count, currency, notes, manual_price_gbp, avg_cost_gbp)
                    VALUES (%(account_id)s, %(ticker)s, %(display_name)s, %(unit_count)s, %(currency)s, %(notes)s, %(manual_price_gbp)s, %(avg_cost_gbp)s)
+                   ON CONFLICT (account_id, lower(ticker)) DO UPDATE SET
+                       unit_count = EXCLUDED.unit_count,
+                       display_name = EXCLUDED.display_name,
+                       notes = EXCLUDED.notes,
+                       manual_price_gbp = EXCLUDED.manual_price_gbp,
+                       avg_cost_gbp = EXCLUDED.avg_cost_gbp,
+                       last_holding_update = NOW()
                    RETURNING *""",
-                body.model_dump(),
+                data,
             )
             return cur.fetchone()
 
