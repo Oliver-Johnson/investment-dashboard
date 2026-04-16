@@ -82,6 +82,38 @@ def init_schema():
                     notes TEXT,
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
+
+                CREATE TABLE IF NOT EXISTS disposals (
+                    id SERIAL PRIMARY KEY,
+                    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    ticker VARCHAR(20) NOT NULL,
+                    display_name VARCHAR(100),
+                    quantity DECIMAL(15,4) NOT NULL,
+                    sale_price_gbp NUMERIC(20,6) NOT NULL,
+                    cost_basis_gbp NUMERIC(20,6),
+                    sale_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    notes TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+
+                CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                    id SERIAL PRIMARY KEY,
+                    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+                    snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    value_gbp NUMERIC(20,6) NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS portfolio_snapshots_unique
+                ON portfolio_snapshots (COALESCE(account_id, -1), snapshot_date);
+
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    id SERIAL PRIMARY KEY,
+                    ticker VARCHAR(20) NOT NULL UNIQUE,
+                    display_name VARCHAR(100),
+                    target_price_gbp NUMERIC(20,6),
+                    notes TEXT,
+                    added_at TIMESTAMPTZ DEFAULT NOW()
+                );
             """)
         conn.commit()
     finally:

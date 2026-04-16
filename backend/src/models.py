@@ -107,6 +107,24 @@ class DividendCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class DisposalCreate(BaseModel):
+    account_id: int
+    ticker: str
+    display_name: Optional[str] = None
+    quantity: float
+    sale_price_gbp: float
+    cost_basis_gbp: Optional[float] = None
+    sale_date: str  # YYYY-MM-DD
+    notes: Optional[str] = None
+
+
+class WatchlistCreate(BaseModel):
+    ticker: str
+    display_name: Optional[str] = None
+    target_price_gbp: Optional[float] = None
+    notes: Optional[str] = None
+
+
 class Dividend(BaseModel):
     id: int
     account_id: int

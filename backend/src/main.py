@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.db import init_schema
-from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions
+from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions, disposals, snapshots, watchlist
 
 app = FastAPI(title="Investment Dashboard API")
 
@@ -59,6 +59,9 @@ app.include_router(debug.router)
 app.include_router(export.router)
 app.include_router(dividends.router)
 app.include_router(contributions.router)
+app.include_router(disposals.router)
+app.include_router(snapshots.router)
+app.include_router(watchlist.router)
 
 
 @app.get("/health")

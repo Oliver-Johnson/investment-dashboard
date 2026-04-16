@@ -6,6 +6,9 @@ import CreateAccountModal from './components/CreateAccountModal';
 import AddHoldingModal from './components/AddHoldingModal';
 import DividendPanel from './components/DividendPanel';
 import ContributionPanel from './components/ContributionPanel';
+import DisposalPanel from './components/DisposalPanel';
+import PortfolioChart from './components/PortfolioChart';
+import WatchlistPage from './components/WatchlistPage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -54,6 +57,7 @@ export default function App() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState('dashboard');
   const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [addHoldingAccount, setAddHoldingAccount] = useState(null);
 
@@ -104,9 +108,13 @@ export default function App() {
         lastRefresh={lastRefresh}
         onRefresh={() => fetchData(true)}
         isRefreshing={isRefreshing}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
       />
 
-      <main className="max-w-7xl mx-auto px-3 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8">
+      {currentPage === 'watchlist' && <WatchlistPage />}
+
+      <main className={`max-w-7xl mx-auto px-3 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8 ${currentPage === 'watchlist' ? 'hidden' : ''}`}>
         {error && !loading && (
           <ErrorBanner message={error} onRetry={() => fetchData(true)} />
         )}
@@ -121,7 +129,12 @@ export default function App() {
             <div className="h-3 w-36 bg-slate-800 rounded" />
           </div>
         ) : (
-          !error && <TotalValuePanel accounts={accounts} total={computedTotal} />
+          !error && (
+            <>
+              <TotalValuePanel accounts={accounts} total={computedTotal} />
+              <PortfolioChart accounts={accounts} />
+            </>
+          )
         )}
 
         <div>
@@ -150,9 +163,10 @@ export default function App() {
           ) : (
             <>
               {accounts.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5 mb-6">
                   <ContributionPanel accounts={accounts} />
                   <DividendPanel accounts={accounts} />
+                  <DisposalPanel accounts={accounts} />
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">

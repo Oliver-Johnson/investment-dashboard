@@ -1,8 +1,8 @@
-import { RefreshCw, TrendingUp, Clock, Download } from 'lucide-react';
+import { RefreshCw, TrendingUp, Clock, Download, Eye } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-export default function Header({ lastRefresh, onRefresh, isRefreshing }) {
+export default function Header({ lastRefresh, onRefresh, isRefreshing, currentPage, setCurrentPage }) {
   const formatted = lastRefresh
     ? lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : '—';
@@ -21,6 +21,26 @@ export default function Header({ lastRefresh, onRefresh, isRefreshing }) {
             <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">Multi-provider investment tracker</p>
           </div>
         </div>
+
+        <nav className="hidden sm:flex items-center gap-1">
+          <button
+            onClick={() => setCurrentPage?.('dashboard')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              currentPage !== 'watchlist' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-300'
+            }`}
+          >
+            Dashboard
+          </button>
+          <button
+            onClick={() => setCurrentPage?.('watchlist')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              currentPage === 'watchlist' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-300'
+            }`}
+          >
+            <Eye size={11} />
+            Watchlist
+          </button>
+        </nav>
 
         <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
           <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
