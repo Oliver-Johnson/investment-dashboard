@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
 
-function getStatus(lastUpdated, expiryHours = 24) {
+function getStatus(lastUpdated, expiryHours = 336) {
   if (!lastUpdated) return { level: 'stale', label: 'Stale — update required' };
   const now = Date.now();
   const updated = new Date(lastUpdated).getTime();
