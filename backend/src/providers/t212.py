@@ -3,7 +3,6 @@ import os
 import time
 import requests
 from decimal import Decimal
-from functools import lru_cache
 from src.providers.yfinance_client import _get_gbpusd_rate
 
 # Credential sets: 'isa' and 'invest'
@@ -29,6 +28,7 @@ T212_API_SECRET = _CREDS["isa"]["api_secret"]
 
 # Per-account caches
 _portfolio_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": None, "expires": 0.0}}
+_metadata_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": None, "expires": 0.0}}
 
 
 def _auth_header(account: str = "isa") -> dict:
@@ -37,12 +37,16 @@ def _auth_header(account: str = "isa") -> dict:
     return {"Authorization": f"Basic {token}"}
 
 
-@lru_cache(maxsize=2)
 def _instrument_metadata(account: str = "isa") -> dict:
-    """Fetch T212 instrument metadata for a given account (isa/invest)."""
+    """Fetch T212 instrument metadata. Cached for 1 hour; returns stale data on failure
+    rather than empty dict, so a transient API error doesn't permanently break GBX→GBP conversion."""
+    cache = _metadata_cache[account]
+    now = time.time()
+    if cache["data"] is not None and now < cache["expires"]:
+        return cache["data"]
     creds = _CREDS[account]
     if not creds["api_key"]:
-        return {}
+        return cache["data"] or {}
     try:
         resp = requests.get(
             f"{creds['base_url']}/equity/metadata/instruments",
@@ -50,15 +54,18 @@ def _instrument_metadata(account: str = "isa") -> dict:
             timeout=30,
         )
         resp.raise_for_status()
-        return {
+        result = {
             inst["ticker"]: {
                 "currency": inst.get("currencyCode", "GBP"),
                 "name": inst.get("name") or inst.get("fullName") or inst.get("shortName") or "",
             }
             for inst in resp.json()
         }
+        cache["data"] = result
+        cache["expires"] = now + 3600
+        return result
     except Exception:
-        return {}
+        return cache["data"] or {}
 
 
 def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
@@ -66,8 +73,8 @@ def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
     as a mutable cache so we only fetch GBPUSD once per portfolio call."""
     if currency == "GBP":
         return price
-    if currency == "GBX":
-        # Pence → pounds
+    if currency in ("GBX", "GBp"):
+        # Pence → pounds (T212 uses GBX; some sources use GBp)
         return price / 100
     if currency == "USD":
         if not gbpusd_ref[0]:
