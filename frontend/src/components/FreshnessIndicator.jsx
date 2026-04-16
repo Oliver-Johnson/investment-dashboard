@@ -1,14 +1,11 @@
 import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
 
-function getStatus(lastUpdated, expiryHours = 336) {
+function getStatus(lastUpdated, nearingHours = 360, expiryHours = 672) {
   if (!lastUpdated) return { level: 'stale', label: 'Stale — update required' };
-  const now = Date.now();
-  const updated = new Date(lastUpdated).getTime();
-  const hoursAgo = (now - updated) / (1000 * 60 * 60);
-  const expiryRatio = hoursAgo / expiryHours;
+  const hoursAgo = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60);
 
-  if (expiryRatio < 0.6) return { level: 'fresh', label: 'Up to date' };
-  if (expiryRatio < 1.0) return { level: 'nearing', label: 'Nearing expiry' };
+  if (hoursAgo < nearingHours) return { level: 'fresh', label: 'Up to date' };
+  if (hoursAgo < expiryHours) return { level: 'nearing', label: 'Nearing expiry' };
   return { level: 'stale', label: 'Stale — update required' };
 }
 
@@ -33,8 +30,8 @@ const CONFIG = {
   },
 };
 
-export default function FreshnessIndicator({ lastUpdated, expiryHours, iconOnly }) {
-  const { level, label } = getStatus(lastUpdated, expiryHours);
+export default function FreshnessIndicator({ lastUpdated, nearingHours, expiryHours, iconOnly }) {
+  const { level, label } = getStatus(lastUpdated, nearingHours, expiryHours);
   const { dot, text, icon: Icon, bg } = CONFIG[level];
 
   return (

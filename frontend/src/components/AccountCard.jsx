@@ -111,7 +111,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                     </span>
                   )}
                   {isManual && account.last_updated && (
-                    <FreshnessIndicator lastUpdated={account.last_updated} expiryHours={336} iconOnly />
+                    <FreshnessIndicator lastUpdated={account.last_updated} iconOnly />
                   )}
                 </div>
               </div>
