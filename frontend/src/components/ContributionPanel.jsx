@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Plus, Trash2 } from 'lucide-react';
 import AddContributionModal from './AddContributionModal';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -45,8 +44,8 @@ export default function ContributionPanel({ accounts }) {
   const load = useCallback(async () => {
     try {
       const [listRes, summaryRes] = await Promise.all([
-        fetch(`${API_URL}/api/contributions`),
-        fetch(`${API_URL}/api/contributions/summary`),
+        apiFetch('/api/contributions'),
+        apiFetch('/api/contributions/summary'),
       ]);
       if (listRes.ok) setContributions(await listRes.json());
       if (summaryRes.ok) setSummary(await summaryRes.json());
@@ -59,7 +58,7 @@ export default function ContributionPanel({ accounts }) {
 
   async function handleDelete(id) {
     if (!confirm('Delete this contribution?')) return;
-    await fetch(`${API_URL}/api/contributions/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/contributions/${id}`, { method: 'DELETE' });
     load();
   }
 

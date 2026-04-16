@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Edit3, Trash2 } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -29,7 +28,7 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
     if (!confirm(`Delete holding "${holding.ticker}"?`)) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_URL}/api/holdings/${holding.id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/holdings/${holding.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       onDeleted();
     } catch (e) {

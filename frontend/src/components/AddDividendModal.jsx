@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 export default function AddDividendModal({ accounts, onClose, onSaved }) {
   const [accountId, setAccountId] = useState(accounts?.[0]?.id ?? '');
@@ -27,7 +26,7 @@ export default function AddDividendModal({ accounts, onClose, onSaved }) {
       if (payDate) body.pay_date = payDate;
       if (notes.trim()) body.notes = notes.trim();
 
-      const res = await fetch(`${API_URL}/api/dividends`, {
+      const res = await apiFetch('/api/dividends', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

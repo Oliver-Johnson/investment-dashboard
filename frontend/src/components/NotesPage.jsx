@@ -5,8 +5,7 @@ import Masonry from 'react-masonry-css';
 import { screens } from '../config/breakpoints.js';
 import NoteCard from './NoteCard';
 import NoteEditor from './NoteEditor';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 export default function NotesPage({ accounts }) {
   const [notes, setNotes] = useState([]);
@@ -25,7 +24,7 @@ export default function NotesPage({ accounts }) {
 
   const fetchNotes = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/notes`);
+      const res = await apiFetch('/api/notes');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNotes(await res.json());
       setError(null);
@@ -38,7 +37,7 @@ export default function NotesPage({ accounts }) {
 
   const fetchTags = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/tags`);
+      const res = await apiFetch('/api/tags');
       if (!res.ok) return;
       setAllTags(await res.json());
     } catch {}
@@ -54,13 +53,13 @@ export default function NotesPage({ accounts }) {
 
   const handleSave = async (data) => {
     if (editingNote) {
-      await fetch(`${API_URL}/api/notes/${editingNote.id}`, {
+      await apiFetch(`/api/notes/${editingNote.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
     } else {
-      await fetch(`${API_URL}/api/notes`, {
+      await apiFetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -73,7 +72,7 @@ export default function NotesPage({ accounts }) {
   };
 
   const handleDelete = async (id) => {
-    await fetch(`${API_URL}/api/notes/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/notes/${id}`, { method: 'DELETE' });
     await fetchNotes();
   };
 

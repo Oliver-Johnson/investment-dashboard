@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Eye, RefreshCw } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   if (value == null) return '—';
@@ -26,7 +25,7 @@ function AddWatchlistModal({ onClose, onAdded }) {
         target_price_gbp: form.target_price_gbp !== '' ? parseFloat(form.target_price_gbp) : null,
         notes: form.notes || null,
       };
-      const res = await fetch(`${API_URL}/api/watchlist`, {
+      const res = await apiFetch('/api/watchlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -123,7 +122,7 @@ export default function WatchlistPage() {
   const fetchData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
     try {
-      const res = await fetch(`${API_URL}/api/watchlist`);
+      const res = await apiFetch('/api/watchlist');
       if (res.ok) setItems(await res.json());
     } catch (e) {
       // silent
@@ -137,7 +136,7 @@ export default function WatchlistPage() {
 
   async function handleDelete(id) {
     if (!confirm('Remove from watchlist?')) return;
-    await fetch(`${API_URL}/api/watchlist/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/watchlist/${id}`, { method: 'DELETE' });
     fetchData();
   }
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Loader2 } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 export default function AddHoldingModal({ accounts, preselectedAccount, onClose, onAdded }) {
   const [accountId, setAccountId] = useState(preselectedAccount?.id ?? accounts[0]?.id ?? '');
@@ -32,7 +31,7 @@ export default function AddHoldingModal({ accounts, preselectedAccount, onClose,
       if (displayName.trim()) body.display_name = displayName.trim();
       if (manualPrice.trim()) body.manual_price_gbp = parseFloat(manualPrice);
       if (avgCost.trim()) body.avg_cost_gbp = parseFloat(avgCost);
-      const res = await fetch(`${API_URL}/api/holdings`, {
+      const res = await apiFetch('/api/holdings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

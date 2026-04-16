@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Plus, Trash2 } from 'lucide-react';
 import AddDisposalModal from './AddDisposalModal';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 const CGT_EXEMPT = 3000;
 
 function formatGBP(value) {
@@ -38,8 +37,8 @@ export default function DisposalPanel({ accounts }) {
   const fetchData = useCallback(async () => {
     try {
       const [listRes, summRes] = await Promise.all([
-        fetch(`${API_URL}/api/disposals`),
-        fetch(`${API_URL}/api/disposals/summary`),
+        apiFetch('/api/disposals'),
+        apiFetch('/api/disposals/summary'),
       ]);
       if (listRes.ok) setDisposals(await listRes.json());
       if (summRes.ok) setSummary(await summRes.json());
@@ -78,7 +77,7 @@ export default function DisposalPanel({ accounts }) {
 
   async function handleDelete(id) {
     if (!confirm('Delete this disposal?')) return;
-    await fetch(`${API_URL}/api/disposals/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/disposals/${id}`, { method: 'DELETE' });
     fetchData();
   }
 

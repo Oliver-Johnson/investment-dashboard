@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { formatGBP } from './HoldingRow';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 export default function EditHoldingModal({ holding, onClose, onSaved }) {
   const [units, setUnits] = useState('');
@@ -31,7 +30,7 @@ export default function EditHoldingModal({ holding, onClose, onSaved }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/holdings/${holding.id}`, {
+      const res = await apiFetch(`/api/holdings/${holding.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

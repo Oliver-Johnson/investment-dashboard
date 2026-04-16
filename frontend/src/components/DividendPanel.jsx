@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Plus, Trash2 } from 'lucide-react';
 import AddDividendModal from './AddDividendModal';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -42,8 +41,8 @@ export default function DividendPanel({ accounts }) {
   const fetchDividends = useCallback(async () => {
     try {
       const [dvRes, sumRes] = await Promise.all([
-        fetch(`${API_URL}/api/dividends`),
-        fetch(`${API_URL}/api/dividends/summary`),
+        apiFetch('/api/dividends'),
+        apiFetch('/api/dividends/summary'),
       ]);
       if (dvRes.ok) setDividends(await dvRes.json());
       if (sumRes.ok) setSummary(await sumRes.json());
@@ -58,7 +57,7 @@ export default function DividendPanel({ accounts }) {
 
   async function handleDelete(id) {
     if (!confirm('Delete this dividend record?')) return;
-    await fetch(`${API_URL}/api/dividends/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/dividends/${id}`, { method: 'DELETE' });
     fetchDividends();
   }
 

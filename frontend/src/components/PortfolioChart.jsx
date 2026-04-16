@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Camera, RefreshCw } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   if (value >= 1_000_000) return `£${(value / 1_000_000).toFixed(2)}M`;
@@ -51,8 +50,8 @@ export default function PortfolioChart({ accounts }) {
     else setRefreshing(true);
     try {
       const [totalRes, accRes] = await Promise.all([
-        fetch(`${API_URL}/api/snapshots?days=${days}`),
-        fetch(`${API_URL}/api/snapshots/accounts?days=${days}`),
+        apiFetch(`/api/snapshots?days=${days}`),
+        apiFetch(`/api/snapshots/accounts?days=${days}`),
       ]);
       if (totalRes.ok) setTotalData(await totalRes.json());
       if (accRes.ok) setAccountData(await accRes.json());

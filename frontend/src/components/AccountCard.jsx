@@ -4,8 +4,7 @@ import HoldingRow, { formatGBP } from './HoldingRow';
 import FreshnessIndicator from './FreshnessIndicator';
 import EditHoldingModal from './EditHoldingModal';
 import EditAccountModal from './EditAccountModal';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 export default function AccountCard({ account, onDataChanged, onAddHolding, portfolioTotal }) {
   const [editingHolding, setEditingHolding] = useState(null);
@@ -43,7 +42,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
 
   async function handleSaveCash() {
     const val = parseFloat(cashInput);
-    await fetch(`${API_URL}/api/accounts/${account.id}`, {
+    await apiFetch(`/api/accounts/${account.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cash_balance_gbp: isNaN(val) ? null : val }),
@@ -56,7 +55,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
     if (!confirm(`Delete account "${account.name}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_URL}/api/accounts/${account.id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/accounts/${account.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       onDataChanged();
     } catch (e) {

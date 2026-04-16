@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   if (value === null || value === undefined || isNaN(value)) return '—';
@@ -48,7 +47,7 @@ export default function AddDisposalModal({ accounts, onClose, onAdded }) {
         sale_date: form.sale_date,
         notes: form.notes || null,
       };
-      const res = await fetch(`${API_URL}/api/disposals`, {
+      const res = await apiFetch('/api/disposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

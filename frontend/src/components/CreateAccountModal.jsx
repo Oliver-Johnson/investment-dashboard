@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { X, Plus, Loader2 } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 const PRESET_COLOURS = [
   { name: 'blue',   value: '#3b82f6' },
@@ -43,7 +42,7 @@ export default function CreateAccountModal({ onClose, onCreated }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/accounts`, {
+      const res = await apiFetch('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

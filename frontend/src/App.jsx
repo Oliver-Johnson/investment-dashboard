@@ -10,8 +10,7 @@ import DisposalPanel from './components/DisposalPanel';
 import PortfolioChart from './components/PortfolioChart';
 import WatchlistPage from './components/WatchlistPage';
 import NotesPage from './components/NotesPage';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from './config/api';
 
 function SkeletonCard() {
   return (
@@ -66,7 +65,7 @@ export default function App() {
     if (showRefreshing) setIsRefreshing(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/portfolio/summary`);
+      const res = await apiFetch('/api/portfolio/summary');
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = await res.json();
       setAccounts(data.accounts ?? []);

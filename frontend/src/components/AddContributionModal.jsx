@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -25,7 +24,7 @@ export default function AddContributionModal({ accounts, onClose, onSaved }) {
       };
       if (notes.trim()) body.notes = notes.trim();
 
-      const res = await fetch(`${API_URL}/api/contributions`, {
+      const res = await apiFetch('/api/contributions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

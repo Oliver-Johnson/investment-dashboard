@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
 import AllocationChart from './AllocationChart';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../config/api';
 
 function formatGBP(value) {
   return new Intl.NumberFormat('en-GB', {
@@ -29,7 +28,7 @@ export default function TotalValuePanel({ accounts, total }) {
   const [contribSummary, setContribSummary] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/contributions/summary`)
+    apiFetch('/api/contributions/summary')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setContribSummary(d); })
       .catch(() => {});
