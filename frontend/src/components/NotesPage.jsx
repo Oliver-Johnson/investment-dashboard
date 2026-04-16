@@ -55,7 +55,7 @@ export default function NotesPage({ accounts }) {
   const handleSave = async (data) => {
     if (editingNote) {
       await fetch(`${API_URL}/api/notes/${editingNote.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
