@@ -107,7 +107,7 @@ export default function NotesPage({ accounts }) {
       </div>
 
       {/* Filter chips */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex overflow-x-auto gap-2 mb-6 pb-1 sm:flex-wrap sm:overflow-x-visible">
         {/* Account filter chips */}
         {accounts.map(a => {
           const active = activeAccountIds.includes(a.id);
@@ -116,7 +116,7 @@ export default function NotesPage({ accounts }) {
             <button
               key={a.id}
               onClick={() => toggleAccountFilter(a.id)}
-              className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+              className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-all"
               style={active
                 ? { backgroundColor: c + '30', borderColor: c, color: c }
                 : { backgroundColor: 'transparent', borderColor: '#334155', color: '#64748b' }
@@ -129,7 +129,7 @@ export default function NotesPage({ accounts }) {
 
         {/* Tag filter */}
         {allTags.length > 0 && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-700 bg-slate-800/50">
+          <div className="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-700 bg-slate-800/50">
             <Tag size={10} className="text-slate-500" />
             <select
               value={activeTag}
@@ -146,7 +146,7 @@ export default function NotesPage({ accounts }) {
         {(activeAccountIds.length > 0 || activeTag) && (
           <button
             onClick={() => { setActiveAccountIds([]); setActiveTag(''); }}
-            className="flex items-center gap-1 px-2 py-1 rounded-full text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 transition-colors"
+            className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 transition-colors"
           >
             <X size={10} /> Clear
           </button>

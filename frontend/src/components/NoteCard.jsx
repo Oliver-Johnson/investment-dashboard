@@ -62,7 +62,7 @@ export default function NoteCard({ note, accounts, onEdit, onDelete }) {
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => onEdit(note)}
-            className="p-1 rounded hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+            className="p-2 rounded hover:bg-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
           >
             <Pencil size={13} />
           </button>
@@ -70,13 +70,13 @@ export default function NoteCard({ note, accounts, onEdit, onDelete }) {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onDelete(note.id)}
-                className="px-1.5 py-0.5 rounded text-[10px] bg-red-600 text-white hover:bg-red-500 transition-colors"
+                className="px-2.5 py-1 rounded text-[10px] bg-red-600 text-white hover:bg-red-500 transition-colors"
               >
                 Confirm
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                className="px-2.5 py-1 rounded text-[10px] bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
               >
                 Cancel
               </button>
@@ -84,7 +84,7 @@ export default function NoteCard({ note, accounts, onEdit, onDelete }) {
           ) : (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="p-1 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
+              className="p-2 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors"
             >
               <Trash2 size={13} />
             </button>
