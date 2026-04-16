@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.auth import require_token
 from src.db import init_schema
-from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions, disposals, snapshots, watchlist, notes, health
+from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions, disposals, snapshots, watchlist, notes, health, admin
 from src.scheduler import start_scheduler
 
 app = FastAPI(title="Investment Dashboard API")
@@ -73,3 +73,4 @@ app.include_router(disposals.router, dependencies=_auth)
 app.include_router(snapshots.router, dependencies=_auth)
 app.include_router(watchlist.router, dependencies=_auth)
 app.include_router(notes.router, dependencies=_auth)
+app.include_router(admin.router, dependencies=_auth)
