@@ -114,6 +114,31 @@ def init_schema():
                     notes TEXT,
                     added_at TIMESTAMPTZ DEFAULT NOW()
                 );
+
+                CREATE TABLE IF NOT EXISTS notes (
+                    id SERIAL PRIMARY KEY,
+                    content TEXT NOT NULL DEFAULT '',
+                    colour VARCHAR(20) NOT NULL DEFAULT '#6366f1',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+
+                CREATE TABLE IF NOT EXISTS note_accounts (
+                    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    PRIMARY KEY (note_id, account_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS note_tags (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL UNIQUE
+                );
+
+                CREATE TABLE IF NOT EXISTS note_tag_links (
+                    note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                    tag_id INTEGER NOT NULL REFERENCES note_tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (note_id, tag_id)
+                );
             """)
         conn.commit()
     finally:
