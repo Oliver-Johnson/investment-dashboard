@@ -41,10 +41,10 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
   return (
     <tr className="group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors">
       <td className="py-2.5 pl-3 pr-4">
-        <span className="text-xs font-semibold text-slate-200 break-words max-w-[180px] leading-tight">
+        <span className="text-xs font-semibold text-slate-200 leading-tight block truncate max-w-[120px] sm:max-w-none">
           {holding.display_name || holding.name || holding.ticker}
         </span>
-        <div className="text-xs text-slate-500 font-mono">{holding.ticker}</div>
+        <div className="text-xs text-slate-500 font-mono hidden sm:block">{holding.ticker}</div>
       </td>
       <td className="py-2.5 px-4 text-right">
         <span className="font-mono text-xs text-slate-300">
@@ -61,7 +61,7 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
           {formatGBP(value)}
         </span>
       </td>
-      <td className="py-2.5 px-4 text-right">
+      <td className="py-2.5 px-4 text-right hidden md:table-cell">
         {holding.gain_loss_gbp != null ? (
           <div className={`font-mono text-xs ${holding.gain_loss_gbp >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             <div>{holding.gain_loss_gbp >= 0 ? '+' : ''}{formatGBP(holding.gain_loss_gbp)}</div>

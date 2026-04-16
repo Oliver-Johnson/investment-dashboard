@@ -82,19 +82,19 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
               >
                 <Building2 size={16} style={{ color: colour }} />
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-semibold text-slate-100">{account.name}</h3>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h3 className="text-sm font-semibold text-slate-100 truncate">{account.name}</h3>
                   <button
                     onClick={() => setEditingAccount(true)}
-                    className="p-0.5 rounded hover:bg-slate-700 text-slate-600 hover:text-slate-400 transition-colors"
+                    className="p-0.5 rounded hover:bg-slate-700 text-slate-600 hover:text-slate-400 transition-colors flex-shrink-0"
                     title="Edit account"
                   >
                     <Pencil size={13} />
                   </button>
                 </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border font-medium ${
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border font-medium hidden sm:inline-flex ${
                     isManual
                       ? 'bg-slate-800 text-slate-400 border-slate-700'
                       : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
@@ -111,15 +111,15 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                     </span>
                   )}
                   {isManual && account.last_updated && (
-                    <FreshnessIndicator lastUpdated={account.last_updated} expiryHours={48} />
+                    <FreshnessIndicator lastUpdated={account.last_updated} expiryHours={48} iconOnly />
                   )}
                 </div>
               </div>
             </div>
 
             <div className="flex items-start gap-2">
-              <div className="text-right">
-                <div className="text-xl font-bold font-mono" style={{ color: colour }}>
+              <div className="text-right flex-shrink-0">
+                <div className="text-lg md:text-xl font-bold font-mono" style={{ color: colour }}>
                   {formatGBP(total)}
                 </div>
                 {hasGainLoss && (
@@ -171,7 +171,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                       <th className="pb-2 px-4 text-right font-medium">Units</th>
                       <th className="pb-2 px-4 text-right font-medium">Price</th>
                       <th className="pb-2 pl-4 pr-3 text-right font-medium">Value</th>
-                      <th className="pb-2 px-4 text-right font-medium">Gain/Loss</th>
+                      <th className="pb-2 px-4 text-right font-medium hidden md:table-cell">Gain/Loss</th>
                       <th className="pb-2 pr-3 w-16" />
                     </tr>
                   </thead>
@@ -219,7 +219,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
               >
                 {account.cash_balance_gbp > 0
                   ? `GBP Cash: ${formatGBP(account.cash_balance_gbp)}`
-                  : '+ Set GBP cash balance'}
+                  : <><span className="sm:hidden">+ Set cash</span><span className="hidden sm:inline">+ Set GBP cash balance</span></>}
               </button>
             )}
             <button

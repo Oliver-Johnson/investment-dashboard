@@ -125,7 +125,7 @@ export default function ContributionPanel({ accounts }) {
           ))}
         </div>
       ) : filteredContributions.length === 0 ? (
-        <div className="text-center py-8 text-slate-600 text-sm">No contributions for this period</div>
+        <div className="text-center py-3 text-slate-600 text-xs">No contributions for this period</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">

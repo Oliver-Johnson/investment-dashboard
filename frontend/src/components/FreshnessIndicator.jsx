@@ -33,14 +33,14 @@ const CONFIG = {
   },
 };
 
-export default function FreshnessIndicator({ lastUpdated, expiryHours }) {
+export default function FreshnessIndicator({ lastUpdated, expiryHours, iconOnly }) {
   const { level, label } = getStatus(lastUpdated, expiryHours);
   const { dot, text, icon: Icon, bg } = CONFIG[level];
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs font-medium ${bg} ${text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${dot} ${level === 'stale' ? 'animate-pulse' : ''}`} />
-      {label}
+      <span className={iconOnly ? 'hidden sm:inline' : undefined}>{label}</span>
     </div>
   );
 }

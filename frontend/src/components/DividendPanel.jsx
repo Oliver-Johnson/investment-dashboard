@@ -125,9 +125,9 @@ export default function DividendPanel({ accounts }) {
       {loading ? (
         <div className="p-6 text-center text-slate-600 text-sm">Loading…</div>
       ) : filteredDividends.length === 0 ? (
-        <div className="p-6 text-center text-slate-600 text-sm">
+        <div className="py-3 px-3 text-center text-slate-600 text-xs">
           {dividends.length === 0
-            ? 'No dividends logged yet. Use "Log Dividend" to record income.'
+            ? 'No dividends logged yet.'
             : 'No dividends in this period.'}
         </div>
       ) : (
