@@ -1,11 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, TrendingUp, Clock, Download, Eye, FileText, Menu, X as MenuX } from 'lucide-react';
+import { API_URL, apiFetch } from '../config/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+function getHealthStatus(data) {
+  if (!data) return 'red';
+  const { hours_since_snapshot, gbpusd_age_s, providers } = data;
+  const providerError = providers && Object.values(providers).some(
+    p => p.last_error_ts && p.last_success_ts && p.last_error_ts > p.last_success_ts
+  );
+  if (hours_since_snapshot > 50 || gbpusd_age_s > 259200 || providerError) return 'red';
+  if (hours_since_snapshot >= 26 || gbpusd_age_s >= 86400) return 'amber';
+  return 'green';
+}
+
+function buildTooltip(data) {
+  if (!data) return 'Health: fetch failed';
+  const { hours_since_snapshot, gbpusd_age_s, providers } = data;
+  const fxHours = (gbpusd_age_s / 3600).toFixed(1);
+  const lines = [
+    `Snapshot age: ${hours_since_snapshot?.toFixed(1)}h`,
+    `GBP/USD age: ${fxHours}h`,
+  ];
+  if (providers) {
+    Object.entries(providers).forEach(([name, p]) => {
+      const hasError = p.last_error_ts && p.last_success_ts && p.last_error_ts > p.last_success_ts;
+      lines.push(`${name}: ${hasError ? 'ERROR' : 'ok'}`);
+    });
+  }
+  return lines.join('\n');
+}
+
+const DOT_COLOURS = {
+  green: 'bg-emerald-500',
+  amber: 'bg-amber-400',
+  red: 'bg-red-500',
+};
 
 export default function Header({ lastRefresh, onRefresh, isRefreshing, currentPage, setCurrentPage }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [healthData, setHealthData] = useState(null);
+  const [healthFailed, setHealthFailed] = useState(false);
+
+  useEffect(() => {
+    const poll = () => apiFetch('/api/health')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setHealthData(d); setHealthFailed(!d); })
+      .catch(() => { setHealthData(null); setHealthFailed(true); });
+    poll();
+    const id = setInterval(poll, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const healthStatus = healthFailed ? 'red' : getHealthStatus(healthData);
+  const healthTooltip = buildTooltip(healthFailed ? null : healthData);
 
   const formatted = lastRefresh
     ? lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -64,6 +112,12 @@ export default function Header({ lastRefresh, onRefresh, isRefreshing, currentPa
           <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
             <Clock size={12} />
             <span>Last updated: <span className="text-slate-400 font-mono">{formatted}</span></span>
+            {healthData !== null || healthFailed ? (
+              <span
+                className={`w-2 h-2 rounded-full ${DOT_COLOURS[healthStatus]} flex-shrink-0`}
+                title={healthTooltip}
+              />
+            ) : null}
           </div>
           <a
             href={`${API_URL}/api/export/csv`}
