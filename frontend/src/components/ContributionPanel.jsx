@@ -80,14 +80,14 @@ export default function ContributionPanel({ accounts }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-start justify-between gap-2 mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center">
+          <div className="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
             <TrendingUp size={13} className="text-emerald-400" />
           </div>
           <span className="text-xs text-slate-500 font-medium uppercase tracking-widest">Contributions</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-3">
           <span className="text-sm font-mono font-semibold text-slate-100">{formatGBP(filteredTotal)}</span>
           <button
             onClick={() => setShowAdd(true)}
