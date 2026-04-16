@@ -159,7 +159,7 @@ export default function NotesPage({ accounts }) {
         <Masonry
           breakpointCols={{ default: 3, [screens.xl]: 3, [screens.md]: 2, 0: 1 }}
           className="flex gap-4"
-          columnClassName="flex flex-col gap-4"
+          columnClassName="flex flex-col gap-4 flex-1"
         >
           {[1, 2, 3, 4].map(i => (
             <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl h-40 animate-pulse" />
@@ -179,19 +179,17 @@ export default function NotesPage({ accounts }) {
         <Masonry
           breakpointCols={{ default: 3, [screens.xl]: 3, [screens.md]: 2, 0: 1 }}
           className="flex gap-4"
-          columnClassName="flex flex-col gap-4"
+          columnClassName="flex flex-col gap-4 flex-1"
         >
-          <AnimatePresence>
-            {filteredNotes.map(note => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                accounts={accounts}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            ))}
-          </AnimatePresence>
+          {filteredNotes.map(note => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              accounts={accounts}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          ))}
         </Masonry>
       )}
 
