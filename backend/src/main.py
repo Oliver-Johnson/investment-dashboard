@@ -1,16 +1,21 @@
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.auth import require_token
 from src.db import init_schema
-from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions, disposals, snapshots, watchlist, notes
+from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions, disposals, snapshots, watchlist, notes, health
 from src.scheduler import start_scheduler
 
 app = FastAPI(title="Investment Dashboard API")
 
+_default_origins = "http://192.168.1.232:3000,http://localhost:3000,http://localhost:5173"
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _default_origins).split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,19 +59,17 @@ def startup():
     start_scheduler()
 
 
-app.include_router(portfolio.router)
-app.include_router(holdings.router)
-app.include_router(accounts.router)
-app.include_router(debug.router)
-app.include_router(export.router)
-app.include_router(dividends.router)
-app.include_router(contributions.router)
-app.include_router(disposals.router)
-app.include_router(snapshots.router)
-app.include_router(watchlist.router)
-app.include_router(notes.router)
+_auth = [Depends(require_token)]
 
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+app.include_router(health.router)
+app.include_router(portfolio.router, dependencies=_auth)
+app.include_router(holdings.router, dependencies=_auth)
+app.include_router(accounts.router, dependencies=_auth)
+app.include_router(debug.router, dependencies=_auth)
+app.include_router(export.router, dependencies=_auth)
+app.include_router(dividends.router, dependencies=_auth)
+app.include_router(contributions.router, dependencies=_auth)
+app.include_router(disposals.router, dependencies=_auth)
+app.include_router(snapshots.router, dependencies=_auth)
+app.include_router(watchlist.router, dependencies=_auth)
+app.include_router(notes.router, dependencies=_auth)
