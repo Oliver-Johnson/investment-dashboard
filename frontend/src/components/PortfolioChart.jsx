@@ -102,16 +102,16 @@ export default function PortfolioChart({ accounts }) {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-slate-100">Portfolio Performance</div>
+      <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="text-sm font-semibold text-slate-100 truncate">Portfolio Performance</div>
           {lastSnapshot && (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-slate-500 whitespace-nowrap">
               Last snapshot: {formatDate(lastSnapshot.snapshot_date)}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => fetchData(false)}
             disabled={loading || refreshing}
