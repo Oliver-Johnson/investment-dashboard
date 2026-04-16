@@ -44,7 +44,6 @@ export default function PortfolioChart({ accounts }) {
   const [totalData, setTotalData] = useState([]);
   const [accountData, setAccountData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [capturing, setCapturing] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -63,18 +62,6 @@ export default function PortfolioChart({ accounts }) {
   }, [days]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  async function handleCapture() {
-    setCapturing(true);
-    try {
-      await fetch(`${API_URL}/api/snapshots/capture`, { method: 'POST' });
-      await fetchData();
-    } catch (e) {
-      // silent
-    } finally {
-      setCapturing(false);
-    }
-  }
 
   // Build chart data for total mode
   const totalChartData = totalData.map(s => ({
@@ -135,16 +122,6 @@ export default function PortfolioChart({ accounts }) {
               </button>
             ))}
           </div>
-          {/* Snapshot button */}
-          <button
-            onClick={handleCapture}
-            disabled={capturing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition-colors disabled:opacity-50"
-            title="Snapshot Now"
-          >
-            <Camera size={12} className={capturing ? 'animate-pulse' : ''} />
-            <span className="hidden sm:inline">Snapshot</span>
-          </button>
         </div>
       </div>
 
@@ -153,14 +130,7 @@ export default function PortfolioChart({ accounts }) {
       ) : !hasData ? (
         <div className="h-48 flex flex-col items-center justify-center text-slate-600">
           <Camera size={24} className="mb-2 opacity-40" />
-          <div className="text-sm">Take your first snapshot to start tracking performance</div>
-          <button
-            onClick={handleCapture}
-            disabled={capturing}
-            className="mt-3 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
-          >
-            {capturing ? 'Capturing...' : 'Snapshot Now'}
-          </button>
+          <div className="text-sm">Snapshots are recorded automatically at 07:30 each weekday</div>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={220}>
