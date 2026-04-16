@@ -52,10 +52,22 @@ def _warmup_caches():
         ex.submit(warm_etoro)
 
 
+def _startup_backfill():
+    try:
+        from src.services.name_backfill import backfill_empty_names
+        result = backfill_empty_names()
+        import logging
+        logging.getLogger(__name__).info("Startup backfill complete: %s", result)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Startup backfill failed: %s", exc)
+
+
 @app.on_event("startup")
 def startup():
     init_schema()
     threading.Thread(target=_warmup_caches, daemon=True).start()
+    threading.Thread(target=_startup_backfill, daemon=True).start()
     start_scheduler()
 
 
