@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.db import init_schema
 from src.routes import portfolio, holdings, accounts, debug, export, dividends, contributions, disposals, snapshots, watchlist, notes
+from src.scheduler import start_scheduler
 
 app = FastAPI(title="Investment Dashboard API")
 
@@ -50,6 +51,7 @@ def _warmup_caches():
 def startup():
     init_schema()
     threading.Thread(target=_warmup_caches, daemon=True).start()
+    start_scheduler()
 
 
 app.include_router(portfolio.router)
