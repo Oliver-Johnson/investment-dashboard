@@ -11,9 +11,9 @@ def _serialize(row: dict) -> dict:
     return r
 
 
-def _do_capture() -> dict:
+def _do_capture(precomputed_summary=None) -> dict:
     from src.routes.portfolio import portfolio_summary
-    summary = portfolio_summary()
+    summary = precomputed_summary if precomputed_summary is not None else portfolio_summary()
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -39,11 +39,10 @@ def list_snapshots(days: int = 90):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT * FROM portfolio_snapshots
+                f"""SELECT * FROM portfolio_snapshots
                    WHERE account_id IS NULL
-                   AND snapshot_date >= CURRENT_DATE - INTERVAL '%s days'
-                   ORDER BY snapshot_date ASC""",
-                (days,),
+                   AND snapshot_date >= CURRENT_DATE - INTERVAL '{int(days)} days'
+                   ORDER BY snapshot_date ASC"""
             )
             return [_serialize(row) for row in cur.fetchall()]
 
@@ -53,11 +52,10 @@ def list_account_snapshots(days: int = 90):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT * FROM portfolio_snapshots
+                f"""SELECT * FROM portfolio_snapshots
                    WHERE account_id IS NOT NULL
-                   AND snapshot_date >= CURRENT_DATE - INTERVAL '%s days'
-                   ORDER BY snapshot_date ASC""",
-                (days,),
+                   AND snapshot_date >= CURRENT_DATE - INTERVAL '{int(days)} days'
+                   ORDER BY snapshot_date ASC"""
             )
             return [_serialize(row) for row in cur.fetchall()]
 
