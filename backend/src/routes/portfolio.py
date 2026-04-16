@@ -14,9 +14,9 @@ def get_freshness(last_update: datetime) -> str:
         last_update = last_update.replace(tzinfo=timezone.utc)
     delta = now - last_update
     hours = delta.total_seconds() / 3600
-    if hours <= 14 * 24:
+    if hours < 15 * 24:
         return "green"
-    if hours <= 30 * 24:
+    if hours < 28 * 24:
         return "amber"
     return "red"
 
