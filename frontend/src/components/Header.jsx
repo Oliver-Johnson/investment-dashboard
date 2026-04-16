@@ -1,4 +1,4 @@
-import { RefreshCw, TrendingUp, Clock, Download, Eye } from 'lucide-react';
+import { RefreshCw, TrendingUp, Clock, Download, Eye, FileText } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -39,6 +39,15 @@ export default function Header({ lastRefresh, onRefresh, isRefreshing, currentPa
           >
             <Eye size={11} />
             Watchlist
+          </button>
+          <button
+            onClick={() => setCurrentPage?.('notes')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              currentPage === 'notes' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-300'
+            }`}
+          >
+            <FileText size={11} />
+            Notes
           </button>
         </nav>
 

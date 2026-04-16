@@ -9,6 +9,7 @@ import ContributionPanel from './components/ContributionPanel';
 import DisposalPanel from './components/DisposalPanel';
 import PortfolioChart from './components/PortfolioChart';
 import WatchlistPage from './components/WatchlistPage';
+import NotesPage from './components/NotesPage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -113,8 +114,9 @@ export default function App() {
       />
 
       {currentPage === 'watchlist' && <WatchlistPage />}
+      {currentPage === 'notes' && <NotesPage accounts={accounts} />}
 
-      <main className={`max-w-7xl mx-auto px-3 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8 ${currentPage === 'watchlist' ? 'hidden' : ''}`}>
+      <main className={`max-w-7xl mx-auto px-3 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8 ${currentPage !== 'dashboard' ? 'hidden' : ''}`}>
         {error && !loading && (
           <ErrorBanner message={error} onRetry={() => fetchData(true)} />
         )}
