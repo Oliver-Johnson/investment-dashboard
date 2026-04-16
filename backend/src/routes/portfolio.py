@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter
 from src.db import get_db
 from src.models import AccountSummary, HoldingWithPrice, PortfolioSummary
@@ -9,10 +9,14 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 
 def get_freshness(last_update: datetime) -> str:
-    days = (datetime.utcnow() - last_update.replace(tzinfo=None)).days
-    if days <= 14:
+    now = datetime.now(timezone.utc)
+    if last_update.tzinfo is None:
+        last_update = last_update.replace(tzinfo=timezone.utc)
+    delta = now - last_update
+    hours = delta.total_seconds() / 3600
+    if hours <= 14 * 24:
         return "green"
-    if days <= 30:
+    if hours <= 30 * 24:
         return "amber"
     return "red"
 
