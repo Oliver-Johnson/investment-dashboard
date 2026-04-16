@@ -1,7 +1,10 @@
+import logging
 import os
 import psycopg2
 from contextlib import contextmanager
 from psycopg2.extras import RealDictCursor
+
+logger = logging.getLogger(__name__)
 
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@postgres:5432/investment_db")
@@ -140,6 +143,22 @@ def init_schema():
                     PRIMARY KEY (note_id, tag_id)
                 );
             """)
+
+            # Dedup duplicate holdings (keep lowest id per account+ticker)
+            cur.execute("""
+                DELETE FROM holdings h USING holdings h2
+                WHERE h.id > h2.id
+                  AND h.account_id = h2.account_id
+                  AND lower(h.ticker) = lower(h2.ticker);
+            """)
+            if cur.rowcount:
+                logger.warning("Deleted %d duplicate holding rows during schema init", cur.rowcount)
+
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS holdings_account_ticker_lower
+                ON holdings (account_id, lower(ticker));
+            """)
+
         conn.commit()
     finally:
         conn.close()
