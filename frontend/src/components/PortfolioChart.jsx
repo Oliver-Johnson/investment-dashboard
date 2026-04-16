@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Camera } from 'lucide-react';
+import { Camera, RefreshCw } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -44,9 +44,11 @@ export default function PortfolioChart({ accounts }) {
   const [totalData, setTotalData] = useState([]);
   const [accountData, setAccountData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     try {
       const [totalRes, accRes] = await Promise.all([
         fetch(`${API_URL}/api/snapshots?days=${days}`),
@@ -58,10 +60,17 @@ export default function PortfolioChart({ accounts }) {
       // silent
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [days]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(false); }, [fetchData]);
+
+  // Poll every 60s so UI reflects snapshots without a manual refresh
+  useEffect(() => {
+    const id = setInterval(() => fetchData(true), 60_000);
+    return () => clearInterval(id);
+  }, [fetchData]);
 
   // Build chart data for total mode
   const totalChartData = totalData.map(s => ({
@@ -83,7 +92,10 @@ export default function PortfolioChart({ accounts }) {
   })();
 
   const chartData = mode === 'total' ? totalChartData : accountChartData;
-  const hasData = chartData.length >= 2;
+  const hasData = chartData.length >= 1;
+  const isSinglePoint = chartData.length === 1;
+
+  const lastSnapshot = totalData.length > 0 ? totalData[totalData.length - 1] : null;
 
   // Account names for multi-line
   const accountNames = [...new Set((accounts ?? []).map(a => a.name))];
@@ -92,8 +104,23 @@ export default function PortfolioChart({ accounts }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <div className="text-sm font-semibold text-slate-100">Portfolio Performance</div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-semibold text-slate-100">Portfolio Performance</div>
+          {lastSnapshot && (
+            <span className="text-xs text-slate-500">
+              Last snapshot: {formatDate(lastSnapshot.snapshot_date)}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchData(false)}
+            disabled={loading || refreshing}
+            title="Refresh"
+            className="p-1 rounded-md text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-30"
+          >
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+          </button>
           {/* Mode toggle */}
           <div className="flex gap-1">
             {['total', 'accounts'].map(m => (
@@ -131,6 +158,14 @@ export default function PortfolioChart({ accounts }) {
         <div className="h-48 flex flex-col items-center justify-center text-slate-600">
           <Camera size={24} className="mb-2 opacity-40" />
           <div className="text-sm">Snapshots are recorded automatically at 07:30 each weekday</div>
+        </div>
+      ) : isSinglePoint ? (
+        <div className="h-48 flex flex-col items-center justify-center">
+          <div className="text-xs text-slate-500 mb-1">{formatDate(chartData[0].date)}</div>
+          <div className="text-3xl font-semibold text-slate-100 mb-2">
+            {formatGBP(chartData[0].Total ?? 0)}
+          </div>
+          <div className="text-xs text-slate-600">1 snapshot recorded — chart will appear as more data accumulates</div>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={220}>
