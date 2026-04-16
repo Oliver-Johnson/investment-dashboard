@@ -15,7 +15,7 @@ export default function NoteCard({ note, accounts, onEdit, onDelete }) {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
-      className="bg-slate-900 border rounded-xl overflow-hidden break-inside-avoid mb-4"
+      className="bg-slate-900 border rounded-xl overflow-hidden"
       style={{ borderColor: colour + '40' }}
     >
       {/* Colour accent bar */}

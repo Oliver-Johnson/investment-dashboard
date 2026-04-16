@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Plus, Tag, X } from 'lucide-react';
+import Masonry from 'react-masonry-css';
 import NoteCard from './NoteCard';
 import NoteEditor from './NoteEditor';
 
@@ -155,11 +156,15 @@ export default function NotesPage({ accounts }) {
 
       {/* Content */}
       {loading ? (
-        <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
+        <Masonry
+          breakpointCols={{ default: 3, 1280: 3, 768: 2, 0: 1 }}
+          className="flex gap-4"
+          columnClassName="flex flex-col gap-4"
+        >
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl h-40 mb-4 animate-pulse break-inside-avoid" />
+            <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl h-40 animate-pulse" />
           ))}
-        </div>
+        </Masonry>
       ) : error ? (
         <div className="text-center py-16 text-red-400 text-sm">{error}</div>
       ) : filteredNotes.length === 0 ? (
@@ -171,7 +176,11 @@ export default function NotesPage({ accounts }) {
           </div>
         </div>
       ) : (
-        <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
+        <Masonry
+          breakpointCols={{ default: 3, 1280: 3, 768: 2, 0: 1 }}
+          className="flex gap-4"
+          columnClassName="flex flex-col gap-4"
+        >
           <AnimatePresence>
             {filteredNotes.map(note => (
               <NoteCard
@@ -183,7 +192,7 @@ export default function NotesPage({ accounts }) {
               />
             ))}
           </AnimatePresence>
-        </div>
+        </Masonry>
       )}
 
       {editorOpen && (
