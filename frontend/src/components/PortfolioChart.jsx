@@ -161,10 +161,22 @@ export default function PortfolioChart({ accounts }) {
         </div>
       ) : isSinglePoint ? (
         <div className="h-48 flex flex-col items-center justify-center">
-          <div className="text-xs text-slate-500 mb-1">{formatDate(chartData[0].date)}</div>
-          <div className="text-3xl font-semibold text-slate-100 mb-2">
-            {formatGBP(chartData[0].Total ?? 0)}
-          </div>
+          <div className="text-xs text-slate-500 mb-2">{formatDate(chartData[0].date)}</div>
+          {mode === 'total' ? (
+            <div className="text-3xl font-semibold text-slate-100 mb-2">
+              {formatGBP(chartData[0].Total ?? 0)}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 mb-2 max-h-32 overflow-y-auto w-full max-w-xs">
+              {accountNames.filter(name => chartData[0][name] != null).map(name => (
+                <div key={name} className="flex items-center gap-2 text-xs">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accountColours[name] || '#6366f1' }} />
+                  <span className="text-slate-400 flex-1 truncate">{name}</span>
+                  <span className="text-slate-100 font-medium">{formatGBP(chartData[0][name])}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="text-xs text-slate-600">1 snapshot recorded — chart will appear as more data accumulates</div>
         </div>
       ) : (
