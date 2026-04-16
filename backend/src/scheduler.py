@@ -156,6 +156,16 @@ def _today_snapshot_exists() -> bool:
         return False
 
 
+def _run_name_backfill():
+    logger.info("Running daily name backfill...")
+    try:
+        from src.services.name_backfill import backfill_empty_names
+        result = backfill_empty_names()
+        logger.info("Daily name backfill complete: %s", result)
+    except Exception as exc:
+        logger.error("Daily name backfill failed: %s", exc)
+
+
 def start_scheduler():
     scheduler = BackgroundScheduler(timezone=_LONDON)
     scheduler.add_job(
@@ -164,8 +174,15 @@ def start_scheduler():
         id="daily_pre_market_snapshot",
         replace_existing=True,
     )
+    scheduler.add_job(
+        _run_name_backfill,
+        CronTrigger(hour=7, minute=45, timezone=_LONDON),
+        id="daily_name_backfill",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info("Snapshot scheduler started — 07:30 Europe/London Mon–Fri")
+    logger.info("Name backfill scheduler started — 07:45 Europe/London daily")
 
     # Catch-up: if today's pre-market has passed and no snapshot yet, run now
     now_london = datetime.now(_LONDON)
