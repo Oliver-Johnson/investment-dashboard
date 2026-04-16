@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { X, Bold, Italic, Heading1, Heading2, List, ListOrdered, Tag, Plus } from 'lucide-react';
@@ -62,6 +63,12 @@ export default function NoteEditor({ note, accounts, onSave, onClose }) {
     }
   }, [accountIds, accounts, autoColour]);
 
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
   const toggleAccount = useCallback((id) => {
     setAutoColour(true);
     setAccountIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -93,8 +100,22 @@ export default function NoteEditor({ note, accounts, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl shadow-2xl flex flex-col h-[95vh] sm:h-auto sm:max-h-[90vh]">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      onClick={onClose}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 24, scale: 0.97 }}
+        transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+        onClick={e => e.stopPropagation()}
+        className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl shadow-2xl flex flex-col h-[95vh] sm:h-auto sm:max-h-[90vh]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <h2 className="text-sm font-semibold text-slate-200">{isEdit ? 'Edit Note' : 'New Note'}</h2>
@@ -247,7 +268,7 @@ export default function NoteEditor({ note, accounts, onSave, onClose }) {
             {saving ? 'Saving…' : isEdit ? 'Update' : 'Create'}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

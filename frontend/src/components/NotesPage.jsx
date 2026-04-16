@@ -195,14 +195,17 @@ export default function NotesPage({ accounts }) {
         </Masonry>
       )}
 
-      {editorOpen && (
-        <NoteEditor
-          note={editingNote}
-          accounts={accounts}
-          onSave={handleSave}
-          onClose={() => { setEditorOpen(false); setEditingNote(null); }}
-        />
-      )}
+      <AnimatePresence>
+        {editorOpen && (
+          <NoteEditor
+            key="editor"
+            note={editingNote}
+            accounts={accounts}
+            onSave={handleSave}
+            onClose={() => { setEditorOpen(false); setEditingNote(null); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
