@@ -162,6 +162,7 @@ export default function App() {
                     account={account}
                     onDataChanged={() => fetchData(true)}
                     onAddHolding={setAddHoldingAccount}
+                    portfolioTotal={computedTotal}
                   />
                 ))}
               </div>

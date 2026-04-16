@@ -59,14 +59,14 @@ export default function TotalValuePanel({ accounts, total }) {
     if (g.subtypes.includes('gia')) {
       const value = showCGT ? giaNetGains : giaTotalValue;
       const label = showCGT ? 'Gains (GIA)' : 'Taxable';
-      return { ...g, label, value };
+      const pct = (total ?? 0) > 0 ? ((giaTotalValue / (total ?? 0)) * 100).toFixed(1) : '0.0';
+      return { ...g, label, value, pct };
     }
-    return {
-      ...g,
-      value: (accounts ?? [])
-        .filter(a => g.subtypes.includes(a.account_subtype))
-        .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0),
-    };
+    const value = (accounts ?? [])
+      .filter(a => g.subtypes.includes(a.account_subtype))
+      .reduce((s, a) => s + (a.total_value_gbp ?? 0), 0);
+    const pct = (total ?? 0) > 0 ? ((value / (total ?? 0)) * 100).toFixed(1) : '0.0';
+    return { ...g, value, pct };
   }).filter(g => g.value !== 0 && (g.subtypes.includes('gia') ? giaTotalValue > 0 : g.value > 0));
 
   // Allowance trackers — use current-tax-year contributions only
@@ -129,6 +129,7 @@ export default function TotalValuePanel({ accounts, total }) {
                 <span key={i}>
                   <span className={g.colour}>{g.label}</span>{' '}
                   <span className="text-slate-300">{formatGBP(g.value)}</span>
+                  <span className="text-slate-600"> · {g.pct}%</span>
                 </span>
               ))}
             </div>

@@ -7,7 +7,7 @@ import EditAccountModal from './EditAccountModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-export default function AccountCard({ account, onDataChanged, onAddHolding }) {
+export default function AccountCard({ account, onDataChanged, onAddHolding, portfolioTotal }) {
   const [editingHolding, setEditingHolding] = useState(null);
   const [editingAccount, setEditingAccount] = useState(false);
   const [expanded, setExpanded] = useState(true);
@@ -125,6 +125,11 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                 {hasGainLoss && (
                   <div className={`text-xs font-mono mt-0.5 ${totalGainLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {totalGainLoss >= 0 ? '+' : ''}{formatGBP(totalGainLoss)}
+                  </div>
+                )}
+                {portfolioTotal > 0 && (
+                  <div className="text-xs text-slate-600 font-mono">
+                    {((account.total_value_gbp / portfolioTotal) * 100).toFixed(1)}% of portfolio
                   </div>
                 )}
                 <div className="text-xs text-slate-500 mt-0.5">
