@@ -75,7 +75,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
         {/* Card header */}
         <div className="px-5 py-4 border-b border-slate-800/60">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <div
                 className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0"
                 style={{ border: `1px solid ${colour}40` }}
@@ -83,8 +83,8 @@ export default function AccountCard({ account, onDataChanged, onAddHolding }) {
                 <Building2 size={16} style={{ color: colour }} />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <h3 className="text-sm font-semibold text-slate-100 truncate">{account.name}</h3>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h3 className="text-sm font-semibold text-slate-100 break-words">{account.name}</h3>
                   <button
                     onClick={() => setEditingAccount(true)}
                     className="p-0.5 rounded hover:bg-slate-700 text-slate-600 hover:text-slate-400 transition-colors flex-shrink-0"
