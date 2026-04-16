@@ -7,3 +7,5 @@ pandas
 requests
 python-dotenv
 pydantic
+apscheduler
+pytz
