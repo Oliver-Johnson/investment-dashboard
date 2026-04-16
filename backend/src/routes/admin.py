@@ -6,6 +6,7 @@ import yfinance as yf
 from fastapi import APIRouter
 
 from src.db import get_db
+from src.providers.t212 import _instrument_metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -14,7 +15,8 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 def _normalize_ticker(ticker: str) -> str | None:
     """Convert DB-stored ticker to a yfinance-compatible symbol.
 
-    T212 stores tickers like AAPL_US_EQ (US) or VUSA_EQ (London).
+    T212 stores tickers like AAPL_US_EQ (US), SGBXL_EQ (LSE, lowercase-l marker),
+    or VUSA_EQ (ambiguous — resolved via T212 metadata currency).
     DB lowercases on write, so we work case-insensitively.
     Returns None for ambiguous/unsupported formats (crypto, ISINs).
     """
@@ -32,10 +34,27 @@ def _normalize_ticker(ticker: str) -> str | None:
     if m:
         return m.group(1).upper()
 
-    # London equity: vusa_eq → VUSA.L (also catches sgbxl_eq → SGBXL.L)
-    m = re.match(r'^([a-z0-9]+)_eq$', t)
+    # LSE equity with explicit London marker: the lowercase 'l' directly before _eq
+    # signals the London listing. Strip it and append .L for yfinance.
+    # e.g. sgbxl_eq → SGBX.L, rrl_eq → RR.L, btl_eq → BT.L
+    m = re.match(r'^([a-z0-9]+)l_eq$', t)
     if m:
         return m.group(1).upper() + ".L"
+
+    # Plain _eq with no 'l' marker and no _US: use T212 metadata currency as hint.
+    # e.g. vusa_eq — could be USD-priced on LSE or genuinely US-listed.
+    m = re.match(r'^([a-z0-9]+)_eq$', t)
+    if m:
+        stem = m.group(1).upper()
+        meta = _instrument_metadata().get(ticker.strip().upper(), {})
+        currency = meta.get("currency", "")
+        if currency.startswith("GB"):  # GBP, GBX, GBp → LSE
+            return stem + ".L"
+        elif currency == "USD":
+            return stem
+        else:
+            # Unknown currency — default to .L (most _EQ tickers without _US are LSE)
+            return stem + ".L"
 
     # Already looks like a yfinance symbol (letters/numbers/dots only)
     if re.match(r'^[a-z0-9.]+$', t):
