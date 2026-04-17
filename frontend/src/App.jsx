@@ -171,7 +171,12 @@ export default function App() {
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {accounts.map(account => (
+                {[...accounts].sort((a, b) => {
+                  const aCash = a.account_subtype === 'cash_isa';
+                  const bCash = b.account_subtype === 'cash_isa';
+                  if (aCash !== bCash) return aCash ? 1 : -1;
+                  return (b.total_value_gbp ?? 0) - (a.total_value_gbp ?? 0);
+                }).map(account => (
                   <AccountCard
                     key={account.id}
                     account={account}
