@@ -19,7 +19,7 @@ function formatNumber(n, decimals = 4) {
   });
 }
 
-export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
+export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onShowHistory }) {
   const [deleting, setDeleting] = useState(false);
   const price = holding.price_gbp ?? holding.current_price ?? 0;
   const value = holding.value_gbp ?? ((holding.unit_count ?? 0) * price);
@@ -40,10 +40,16 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted }) {
   return (
     <tr className="group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors">
       <td className="py-2.5 pl-3 pr-4">
-        <span className="text-xs font-semibold text-slate-200 leading-tight block truncate max-w-[120px] sm:max-w-none">
-          {holding.display_name || holding.name || holding.ticker}
-        </span>
-        <div className="text-xs text-slate-500 font-mono hidden sm:block">{holding.ticker}</div>
+        <button
+          onClick={() => onShowHistory && onShowHistory(holding)}
+          className="text-left group/name"
+          title="View price history"
+        >
+          <span className="text-xs font-semibold text-slate-200 leading-tight block truncate max-w-[120px] sm:max-w-none group-hover/name:text-blue-400 transition-colors">
+            {holding.display_name || holding.name || holding.ticker}
+          </span>
+          <div className="text-xs text-slate-500 font-mono hidden sm:block">{holding.ticker}</div>
+        </button>
       </td>
       <td className="py-2.5 px-4 text-right">
         <span className="font-mono text-xs text-slate-300">

@@ -3,11 +3,13 @@ import { Building2, ChevronDown, ChevronUp, Trash2, Loader2, Pencil } from 'luci
 import HoldingRow, { formatGBP } from './HoldingRow';
 import FreshnessIndicator from './FreshnessIndicator';
 import EditHoldingModal from './EditHoldingModal';
+import HoldingHistoryModal from './HoldingHistoryModal';
 import EditAccountModal from './EditAccountModal';
 import { apiFetch } from '../config/api';
 
 export default function AccountCard({ account, onDataChanged, onAddHolding, portfolioTotal }) {
   const [editingHolding, setEditingHolding] = useState(null);
+  const [historyHolding, setHistoryHolding] = useState(null);
   const [editingAccount, setEditingAccount] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -195,6 +197,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                         isManual={isManual}
                         onEdit={setEditingHolding}
                         onDeleted={onDataChanged}
+                        onShowHistory={setHistoryHolding}
                       />
                     ))}
                   </tbody>
@@ -248,6 +251,13 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
         holding={editingHolding}
         onClose={() => setEditingHolding(null)}
         onSaved={onDataChanged}
+      />
+
+      <HoldingHistoryModal
+        symbol={historyHolding?.ticker?.toUpperCase()}
+        name={historyHolding?.display_name || historyHolding?.name}
+        isOpen={!!historyHolding}
+        onClose={() => setHistoryHolding(null)}
       />
 
       {editingAccount && (
