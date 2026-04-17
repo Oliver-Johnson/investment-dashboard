@@ -180,7 +180,15 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                     </tr>
                   </thead>
                   <tbody>
-                    {account.holdings.map(holding => (
+                    {[...account.holdings].sort((a, b) => {
+                      const aCash = a.ticker === 'CASH' || a.ticker === 'CASH_GBP';
+                      const bCash = b.ticker === 'CASH' || b.ticker === 'CASH_GBP';
+                      if (aCash !== bCash) return aCash ? 1 : -1;
+                      const bv = b.value_gbp ?? 0;
+                      const av = a.value_gbp ?? 0;
+                      if (bv !== av) return bv - av;
+                      return (a.ticker ?? '').localeCompare(b.ticker ?? '');
+                    }).map(holding => (
                       <HoldingRow
                         key={holding.id}
                         holding={holding}
