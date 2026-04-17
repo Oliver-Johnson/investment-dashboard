@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Eye, RefreshCw } from 'lucide-react';
 import { apiFetch } from '../config/api';
+import HoldingHistoryModal from './HoldingHistoryModal';
 
 function formatGBP(value) {
   if (value == null) return '—';
@@ -118,6 +119,7 @@ export default function WatchlistPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [historyItem, setHistoryItem] = useState(null);
 
   const fetchData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -206,7 +208,10 @@ export default function WatchlistPage() {
                       : pct >= 0 ? 'text-emerald-400' : 'text-red-400';
                     return (
                       <tr key={item.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                        <td className="py-3 px-4 font-semibold text-slate-100">{item.ticker}</td>
+                        <td
+                          className="py-3 px-4 font-semibold text-slate-100 cursor-pointer hover:text-blue-400 transition-colors"
+                          onClick={() => setHistoryItem(item)}
+                        >{item.ticker}</td>
                         <td className="py-3 px-4 text-slate-400">{item.display_name || '—'}</td>
                         <td className="py-3 px-4 text-right text-slate-200">
                           {item.current_price_gbp != null ? formatGBP(item.current_price_gbp) : (
@@ -244,6 +249,13 @@ export default function WatchlistPage() {
           onAdded={() => { fetchData(); setShowAdd(false); }}
         />
       )}
+
+      <HoldingHistoryModal
+        symbol={historyItem?.ticker ?? null}
+        name={historyItem?.display_name ?? historyItem?.ticker ?? null}
+        isOpen={historyItem != null}
+        onClose={() => setHistoryItem(null)}
+      />
     </div>
   );
 }

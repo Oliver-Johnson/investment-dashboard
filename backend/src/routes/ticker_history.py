@@ -2,6 +2,8 @@ import time
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
 
+from src.services.name_backfill import _normalize_ticker
+
 router = APIRouter(prefix="/api/ticker", tags=["ticker"])
 
 _cache: dict = {}
@@ -21,23 +23,27 @@ def get_ticker_history(symbol: str, range: str = "1m"):
     if range not in _RANGE_MAP:
         raise HTTPException(status_code=400, detail=f"Invalid range. Use: {', '.join(_RANGE_MAP)}")
 
-    sym = symbol.upper()
-    key = f"{sym}:{range}"
+    # Normalise broker-specific symbol formats (T212, eToro) to yfinance symbols
+    yf_sym = _normalize_ticker(symbol)
+    if not yf_sym:
+        raise HTTPException(status_code=422, detail=f"Symbol not found in market data: {symbol}")
+
+    key = f"{yf_sym}:{range}"
     now = time.time()
 
     if key in _cache and now - _cache[key]["ts"] < _CACHE_TTL:
         return _cache[key]["data"]
 
     try:
-        hist = yf.Ticker(sym).history(period=_RANGE_MAP[range])
+        hist = yf.Ticker(yf_sym).history(period=_RANGE_MAP[range])
         if hist.empty:
-            raise HTTPException(status_code=404, detail=f"No data found for: {sym}")
+            raise HTTPException(status_code=422, detail=f"Symbol not found in market data: {symbol}")
 
         data = [
             {"date": str(idx.date()), "close": round(float(row["Close"]), 4)}
             for idx, row in hist.iterrows()
         ]
-        result = {"symbol": sym, "range": range, "data": data}
+        result = {"symbol": yf_sym, "range": range, "data": data}
         _cache[key] = {"ts": now, "data": result}
         return result
     except HTTPException:
