@@ -230,8 +230,11 @@ def fetch_portfolio() -> list[dict]:
                 all_instrument_ids.add(pos["instrumentID"])
 
     instrument_ids = tuple(sorted(all_instrument_ids))
-    names = _instrument_names(instrument_ids)
-    tickers = _instrument_tickers(instrument_ids)
+    # Block until instrument data is fully loaded (lru_cache ensures single fetch)
+    # so we never cache portfolio results with fallback "eToro #ID" names.
+    all_data = _all_instrument_data()
+    names = {iid: all_data[iid]["name"] for iid in instrument_ids if iid in all_data}
+    tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
 
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     results = []
@@ -333,8 +336,11 @@ def fetch_portfolio() -> list[dict]:
                 "net_profit_gbp": net_profit_gbp,
             })
 
-    _portfolio_cache["data"] = results
-    _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
+    # Don't cache if instrument data failed to load — names will be fallbacks.
+    # Next request will retry instrument resolution.
+    if all_data:
+        _portfolio_cache["data"] = results
+        _portfolio_cache["expires"] = time.time() + 300  # cache for 5 minutes
     return results
 
 
