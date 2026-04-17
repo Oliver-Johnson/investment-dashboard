@@ -20,6 +20,10 @@ def _normalize_ticker(ticker: str) -> str | None:
     """
     t = ticker.strip().lower()
 
+    # Reject unresolved eToro instrument IDs (pure numeric strings like "123456")
+    if t.isdigit():
+        return None
+
     # Skip obviously non-equity formats
     if "-" in t or len(t) > 15:
         return None

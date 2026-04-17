@@ -27,12 +27,24 @@ def _auth_headers() -> dict:
 
 
 @lru_cache(maxsize=1)
-def _all_instrument_names() -> dict:
-    """Fetch ALL eToro instrument names via search API. Returns {instrumentId(int): name}.
+def _all_instrument_data() -> dict:
+    """Fetch ALL eToro instrument metadata. Returns {instrumentId: {"name": str, "ticker": str|None}}.
 
-    Primary: private market-data/instruments endpoint (500s for individual API keys).
-    Fallback: market-data/search with large pageSize — works with individual keys.
+    Primary: private market-data/instruments endpoint.
+    Fallback: market-data/search with large pageSize.
     """
+    def _extract(inst: dict, fallback_id) -> dict:
+        name = (
+            inst.get("displayname")
+            or inst.get("internalInstrumentDisplayName")
+            or inst.get("displayName")
+            or inst.get("internalSymbolFull")
+            or f"eToro #{fallback_id}"
+        )
+        raw_ticker = inst.get("symbolFull") or inst.get("internalSymbolFull")
+        ticker = raw_ticker.upper() if raw_ticker else None
+        return {"name": name, "ticker": ticker}
+
     # Try private instruments API first
     try:
         resp = requests.get(
@@ -44,16 +56,13 @@ def _all_instrument_names() -> dict:
         data = resp.json()
         instruments = data.get("instrumentDisplayDatas", data if isinstance(data, list) else [])
         if instruments:
-            return {
-                inst.get("instrumentId"): (
-                    inst.get("displayname")
-                    or inst.get("internalInstrumentDisplayName")
-                    or inst.get("internalSymbolFull")
-                    or f"eToro #{inst.get('instrumentId', '?')}"
-                )
+            result = {
+                inst["instrumentId"]: _extract(inst, inst["instrumentId"])
                 for inst in instruments
                 if inst.get("instrumentId")
             }
+            if result:
+                return result
     except Exception:
         pass
 
@@ -100,13 +109,9 @@ def _all_instrument_names() -> dict:
 
         # Portfolio positions use instrumentID (numeric); search results expose this
         # as either "instrumentId" (no "internal" prefix) or "internalInstrumentId".
-        # Prefer plain instrumentId so the key space matches portfolio's instrumentID.
         return {
-            (inst.get("instrumentId") or inst.get("internalInstrumentId")): (
-                inst.get("internalInstrumentDisplayName")
-                or inst.get("displayName")
-                or inst.get("internalSymbolFull")
-                or f"eToro #{inst.get('instrumentId', inst.get('internalInstrumentId', '?'))}"
+            (inst.get("instrumentId") or inst.get("internalInstrumentId")): _extract(
+                inst, inst.get("instrumentId") or inst.get("internalInstrumentId")
             )
             for inst in all_items
             if (inst.get("instrumentId") or inst.get("internalInstrumentId"))
@@ -115,20 +120,43 @@ def _all_instrument_names() -> dict:
         return {}
 
 
+def _all_instrument_names() -> dict:
+    """Returns {instrumentId: display_name}. Delegates to _all_instrument_data cache."""
+    return {k: v["name"] for k, v in _all_instrument_data().items()}
+
+
+def _all_instrument_tickers() -> dict:
+    """Returns {instrumentId: ticker_symbol}. Delegates to _all_instrument_data cache."""
+    return {k: v["ticker"] for k, v in _all_instrument_data().items() if v.get("ticker")}
+
+
 def _instrument_names(instrument_ids_tuple: tuple) -> dict:
     """Look up names from the cached map. Non-blocking: returns eToro #ID if cache not ready."""
     # Check if cache is populated without blocking on a full fetch
-    cache_info = _all_instrument_names.cache_info()
+    cache_info = _all_instrument_data.cache_info()
     if cache_info.currsize > 0:
         all_names = _all_instrument_names()
     else:
         # Cache not ready — trigger background fetch and return IDs for now
-        threading.Thread(target=_all_instrument_names, daemon=True).start()
+        threading.Thread(target=_all_instrument_data, daemon=True).start()
         all_names = {}
 
     if not instrument_ids_tuple:
         return all_names
     return {iid: all_names.get(iid, f"eToro #{iid}") for iid in instrument_ids_tuple}
+
+
+def _instrument_tickers(instrument_ids_tuple: tuple) -> dict:
+    """Look up ticker symbols from the cached map. Non-blocking: returns None if cache not ready."""
+    cache_info = _all_instrument_data.cache_info()
+    if cache_info.currsize > 0:
+        all_tickers = _all_instrument_tickers()
+    else:
+        all_tickers = {}
+
+    if not instrument_ids_tuple:
+        return all_tickers
+    return {iid: all_tickers.get(iid) for iid in instrument_ids_tuple}
 
 
 def fetch_portfolio_cached() -> list[dict] | None:
@@ -203,6 +231,7 @@ def fetch_portfolio() -> list[dict]:
 
     instrument_ids = tuple(sorted(all_instrument_ids))
     names = _instrument_names(instrument_ids)
+    tickers = _instrument_tickers(instrument_ids)
 
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     results = []
@@ -237,11 +266,22 @@ def fetch_portfolio() -> list[dict]:
         # eToro exposes realised+unrealised P&L directly as netProfit (USD).
         # Use it when available — more reliable than recomputing from openRate,
         # especially for leveraged/CFD positions.
-        raw_profit = pos.get("netProfit") or pos.get("profit") or pos.get("pnl")
+        # Use explicit key-presence check (not `or`) so that netProfit=0.0 is preserved
+        # rather than falling through to `profit`/`pnl` which may contain non-P&L values.
+        if "netProfit" in pos:
+            raw_profit = pos["netProfit"]
+        elif "profit" in pos:
+            raw_profit = pos["profit"]
+        elif "pnl" in pos:
+            raw_profit = pos["pnl"]
+        else:
+            raw_profit = None
         net_profit_gbp = (Decimal(str(raw_profit)) / gbpusd) if raw_profit is not None else None
 
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
-        ticker = str(instrument_id)  # eToro uses numeric IDs, not tickers
+        # Use the resolved ticker symbol from eToro instrument data; fall back to numeric ID
+        # if the instruments cache hasn't loaded yet (will resolve on next portfolio fetch).
+        ticker = tickers.get(instrument_id) or str(instrument_id)
 
         results.append({
             "ticker": ticker,
@@ -272,11 +312,18 @@ def fetch_portfolio() -> list[dict]:
                     avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
                 else:
                     avg_price_gbp = open_rate / gbpusd
-            raw_profit = pos.get("netProfit") or pos.get("profit") or pos.get("pnl")
+            if "netProfit" in pos:
+                raw_profit = pos["netProfit"]
+            elif "profit" in pos:
+                raw_profit = pos["profit"]
+            elif "pnl" in pos:
+                raw_profit = pos["pnl"]
+            else:
+                raw_profit = None
             net_profit_gbp = (Decimal(str(raw_profit)) / gbpusd) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
             results.append({
-                "ticker": str(instrument_id),
+                "ticker": tickers.get(instrument_id) or str(instrument_id),
                 "display_name": f"{display_name} (via {mirror_name})",
                 "quantity": units,
                 "currency": "USD",
