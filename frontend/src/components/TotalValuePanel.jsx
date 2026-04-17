@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign } from 'lucide-react';
+import { PoundSterling } from 'lucide-react';
 import AllocationChart from './AllocationChart';
 import { apiFetch } from '../config/api';
 
@@ -102,7 +102,7 @@ export default function TotalValuePanel({ accounts, total }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center">
-              <DollarSign size={13} className="text-emerald-400" />
+              <PoundSterling size={13} className="text-emerald-400" />
             </div>
             <span className="text-xs text-slate-500 font-medium uppercase tracking-widest">Total Portfolio Value</span>
           </div>
