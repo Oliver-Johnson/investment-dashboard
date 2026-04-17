@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Camera, RefreshCw } from 'lucide-react';
 import { apiFetch } from '../config/api';
 
@@ -21,22 +21,6 @@ const TIME_RANGES = [
   { key: 3650, label: 'All' },
 ];
 
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs">
-      <div className="text-slate-400 mb-1">{formatDate(label)}</div>
-      {payload.map((p, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-          <span className="text-slate-300">{p.name}:</span>
-          <span className="text-white font-medium">{formatGBP(p.value)}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 export default function PortfolioChart({ accounts }) {
   const [days, setDays] = useState(90);
   const [mode, setMode] = useState('total'); // 'total' | 'accounts'
@@ -44,6 +28,7 @@ export default function PortfolioChart({ accounts }) {
   const [accountData, setAccountData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activePoint, setActivePoint] = useState(null);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -64,6 +49,9 @@ export default function PortfolioChart({ accounts }) {
   }, [days]);
 
   useEffect(() => { fetchData(false); }, [fetchData]);
+
+  // Reset scrub position when range or mode changes
+  useEffect(() => { setActivePoint(null); }, [days, mode]);
 
   // Poll every 60s so UI reflects snapshots without a manual refresh
   useEffect(() => {
@@ -99,6 +87,33 @@ export default function PortfolioChart({ accounts }) {
   // Account names for multi-line
   const accountNames = [...new Set((accounts ?? []).map(a => a.name))];
   const accountColours = Object.fromEntries((accounts ?? []).map(a => [a.name, a.colour || '#6366f1']));
+
+  // Derive display point: hover/touch state, or last data point
+  const displayPoint = (() => {
+    if (activePoint) return activePoint;
+    if (!chartData.length) return null;
+    const last = chartData[chartData.length - 1];
+    if (mode === 'total') {
+      return {
+        label: last.date,
+        payload: [{ name: 'Total', value: last.Total, color: '#6366f1' }],
+      };
+    }
+    return {
+      label: last.date,
+      payload: accountNames
+        .filter(name => last[name] != null)
+        .map(name => ({ name, value: last[name], color: accountColours[name] || '#6366f1' })),
+    };
+  })();
+
+  const handleMouseMove = (data) => {
+    if (data?.activePayload?.length) {
+      setActivePoint({ label: data.activeLabel, payload: data.activePayload });
+    }
+  };
+
+  const handleMouseLeave = () => setActivePoint(null);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
@@ -179,49 +194,77 @@ export default function PortfolioChart({ accounts }) {
           <div className="text-xs text-slate-600">1 snapshot recorded — chart will appear as more data accumulates</div>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatDate}
-              tick={{ fontSize: 11, fill: '#64748b' }}
-              axisLine={false}
-              tickLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              tickFormatter={formatGBP}
-              tick={{ fontSize: 11, fill: '#64748b' }}
-              axisLine={false}
-              tickLine={false}
-              width={60}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            {mode === 'total' ? (
-              <Line
-                type="monotone"
-                dataKey="Total"
-                stroke="#6366f1"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: '#6366f1' }}
+        <>
+          {/* Always-visible scrubbing summary row */}
+          {displayPoint && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1 min-h-[1.5rem]">
+              <span className="text-xs text-slate-400 font-medium tabular-nums">{formatDate(displayPoint.label)}</span>
+              {displayPoint.payload.map((p, i) => (
+                <span key={i} className="flex items-center gap-1.5 text-xs">
+                  <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ background: p.color }} />
+                  <span className="text-slate-400">{p.name}:</span>
+                  <span className="text-slate-100 font-semibold tabular-nums">{formatGBP(p.value)}</span>
+                </span>
+              ))}
+              {mode === 'accounts' && displayPoint.payload.length > 1 && (
+                <span className="flex items-center gap-1.5 text-xs ml-auto">
+                  <span className="text-slate-500">Total:</span>
+                  <span className="text-white font-bold tabular-nums">
+                    {formatGBP(displayPoint.payload.reduce((s, p) => s + (p.value || 0), 0))}
+                  </span>
+                </span>
+              )}
+            </div>
+          )}
+
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatDate}
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
               />
-            ) : (
-              accountNames.map(name => (
+              <YAxis
+                tickFormatter={formatGBP}
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                axisLine={false}
+                tickLine={false}
+                width={60}
+              />
+              {mode === 'total' ? (
                 <Line
-                  key={name}
                   type="monotone"
-                  dataKey={name}
-                  stroke={accountColours[name] || '#6366f1'}
-                  strokeWidth={1.5}
+                  dataKey="Total"
+                  stroke="#6366f1"
+                  strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 3 }}
+                  activeDot={{ r: 4, fill: '#6366f1' }}
                 />
-              ))
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+              ) : (
+                accountNames.map(name => (
+                  <Line
+                    key={name}
+                    type="monotone"
+                    dataKey={name}
+                    stroke={accountColours[name] || '#6366f1'}
+                    strokeWidth={1.5}
+                    dot={false}
+                    activeDot={{ r: 3 }}
+                  />
+                ))
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </>
       )}
     </div>
   );
