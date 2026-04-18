@@ -142,6 +142,45 @@ def _fetch_all_instrument_data() -> dict:
         return {}
 
 
+def _fetch_instruments_by_ids(instrument_ids: list[int], headers: dict) -> dict:
+    """Fetch instrument metadata for specific IDs via POST /api/v2/instruments.
+
+    Batches up to 50 IDs per request. Returns {instrument_id: {"name": str, "ticker": str|None}}.
+    Returns empty dict on any failure — caller should fall back to _all_instrument_data().
+    """
+    def _extract(inst: dict, fallback_id) -> dict:
+        name = (
+            inst.get("internalInstrumentDisplayName")
+            or inst.get("displayname")
+            or inst.get("displayName")
+            or inst.get("internalSymbolFull")
+            or f"eToro #{fallback_id}"
+        )
+        raw_ticker = inst.get("internalSymbolFull") or inst.get("symbolFull")
+        ticker = raw_ticker.upper() if raw_ticker else None
+        return {"name": name, "ticker": ticker}
+
+    result: dict = {}
+    try:
+        for i in range(0, len(instrument_ids), 50):
+            batch = instrument_ids[i:i + 50]
+            resp = requests.post(
+                "https://api.etoro.com/api/v2/instruments",
+                json={"instrumentIds": batch},
+                headers=headers,
+                timeout=15,
+            )
+            resp.raise_for_status()
+            items = resp.json().get("items", [])
+            for inst in items:
+                inst_id = inst.get("instrumentId") or inst.get("internalInstrumentId")
+                if inst_id:
+                    result[int(inst_id)] = _extract(inst, inst_id)
+    except Exception:
+        return {}
+    return result
+
+
 def _all_instrument_names() -> dict:
     """Returns {instrumentId: display_name}. Delegates to _all_instrument_data cache."""
     return {k: v["name"] for k, v in _all_instrument_data().items()}
@@ -250,39 +289,23 @@ def fetch_portfolio() -> list[dict]:
                 all_instrument_ids.add(int(pos["instrumentID"]))
 
     instrument_ids = tuple(sorted(all_instrument_ids))
-    # Block until instrument data is fully loaded (only caches on success, retries on failure)
-    # so we never cache portfolio results with fallback "eToro #ID" names.
-    all_data = _all_instrument_data()
+    # Targeted batch POST for only the IDs present in this portfolio.
+    # Falls back to the bulk fetch if the POST endpoint fails or returns empty.
+    inst_headers = _auth_headers()
+    all_data = _fetch_instruments_by_ids(list(instrument_ids), inst_headers)
+    if not all_data:
+        all_data = _all_instrument_data()
+    else:
+        # Merge results into the shared cache (only on non-empty result)
+        global _instrument_data_cache
+        with _instrument_data_lock:
+            if _instrument_data_cache is None:
+                _instrument_data_cache = dict(all_data)
+            else:
+                _instrument_data_cache.update(all_data)
+
     names = {iid: all_data[iid]["name"] for iid in instrument_ids if iid in all_data}
     tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
-
-    # Targeted search fallback for any instrument IDs not found in bulk data.
-    # Some instruments (direct holdings, delisted, etc.) may be missing from the
-    # instruments/search endpoints but can still be found via individual search.
-    missing_ids = [iid for iid in instrument_ids if iid not in all_data]
-    if missing_ids:
-        logger.info("etoro: %d instrument IDs not in bulk data, trying targeted search: %s", len(missing_ids), missing_ids)
-        for mid in missing_ids:
-            try:
-                r = requests.get(
-                    f"{ETORO_BASE_URL}/api/v1/market-data/search",
-                    params={"text": str(mid), "page": 1, "pageSize": 10},
-                    headers=_auth_headers(),
-                    timeout=15,
-                )
-                r.raise_for_status()
-                items = r.json().get("items", [])
-                for item in items:
-                    item_id = int(item.get("instrumentId") or item.get("internalInstrumentId") or 0)
-                    if item_id == mid:
-                        extracted = _extract(item, item_id)
-                        names[mid] = extracted["name"]
-                        if extracted.get("ticker"):
-                            tickers[mid] = extracted["ticker"]
-                        logger.info("etoro: resolved instrument %d → %s via targeted search", mid, extracted["name"])
-                        break
-            except Exception as exc:
-                logger.warning("etoro: targeted search for instrument %d failed: %s", mid, exc)
 
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     results = []
