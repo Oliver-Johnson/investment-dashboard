@@ -61,6 +61,7 @@ class HoldingWithPrice(BaseModel):
     gain_loss_pct: Optional[float] = None   # gain_loss / cost_basis
     last_holding_update: datetime
     freshness: str  # green/amber/red
+    pie: Optional[dict] = None  # {"id": int, "name": str} for T212 pie holdings
 
 
 class AccountSummary(BaseModel):

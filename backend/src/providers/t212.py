@@ -29,6 +29,7 @@ T212_API_SECRET = _CREDS["isa"]["api_secret"]
 # Per-account caches
 _portfolio_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": None, "expires": 0.0}}
 _metadata_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": None, "expires": 0.0}}
+_pies_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": None, "expires": 0.0}}
 
 
 def _auth_header(account: str = "isa") -> dict:
@@ -124,6 +125,7 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
 
     positions = resp.json()
     metadata = _instrument_metadata(account)
+    pie_map = fetch_pies(account)
     gbpusd_ref = [None]  # mutable cache for lazy GBPUSD fetch
     results = []
 
@@ -150,6 +152,7 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
         avg_price_gbp = _price_to_gbp(avg_price, currency, gbpusd_ref)
         market_value_gbp = quantity * current_price_gbp
 
+        pie_info = pie_map.get(ticker)
         result = {
             "ticker": ticker,
             "display_name": display_name,
@@ -157,6 +160,7 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
             "avg_price": avg_price_gbp,
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
+            "pie": {"id": pie_info["pieId"], "name": pie_info["pieName"]} if pie_info else None,
         }
         if ppl_gbp is not None:
             result["ppl_gbp"] = Decimal(str(ppl_gbp))
@@ -165,6 +169,53 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
     _portfolio_cache[account]["data"] = results
     _portfolio_cache[account]["expires"] = time.time() + 300
     return results
+
+
+def fetch_pies(account: str = "isa") -> dict:
+    """Fetch T212 pies and return {ticker: {pieId, pieName}} map. Cached 5 min.
+    Returns stale data (or {}) on API failure so callers degrade gracefully."""
+    cache = _pies_cache[account]
+    now = time.time()
+    if cache["data"] is not None and now < cache["expires"]:
+        return cache["data"]
+
+    creds = _CREDS[account]
+    if not creds["api_key"]:
+        return {}
+
+    headers = _auth_header(account)
+    try:
+        resp = requests.get(f"{creds['base_url']}/equity/pies", headers=headers, timeout=15)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return cache["data"] or {}
+
+    pies = resp.json()
+    ticker_map: dict = {}
+
+    for pie in pies:
+        pie_id = pie.get("id")
+        pie_name = (pie.get("settings") or {}).get("name") or pie.get("name") or f"Pie {pie_id}"
+
+        try:
+            detail_resp = requests.get(
+                f"{creds['base_url']}/equity/pies/{pie_id}",
+                headers=headers,
+                timeout=15,
+            )
+            detail_resp.raise_for_status()
+            detail = detail_resp.json()
+        except requests.RequestException:
+            continue
+
+        for inst in detail.get("instruments", []):
+            ticker = inst.get("ticker") or (inst.get("result") or {}).get("ticker") or ""
+            if ticker:
+                ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
+
+    cache["data"] = ticker_map
+    cache["expires"] = now + 300
+    return ticker_map
 
 
 def fetch_cash_balance(account: str = "isa") -> dict | None:

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Building2, ChevronDown, ChevronUp, Trash2, Loader2, Pencil } from 'lucide-react';
+import React, { useState } from 'react';
+import { Building2, ChevronDown, ChevronUp, Trash2, Loader2, Pencil, PieChart } from 'lucide-react';
 import HoldingRow, { formatGBP } from './HoldingRow';
 import FreshnessIndicator from './FreshnessIndicator';
 import EditHoldingModal from './EditHoldingModal';
@@ -12,6 +12,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
   const [historyHolding, setHistoryHolding] = useState(null);
   const [editingAccount, setEditingAccount] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [expandedPies, setExpandedPies] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [editingCash, setEditingCash] = useState(false);
   const [cashInput, setCashInput] = useState('');
@@ -182,24 +183,105 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                     </tr>
                   </thead>
                   <tbody>
-                    {[...account.holdings].sort((a, b) => {
-                      const aCash = a.ticker === 'CASH' || a.ticker === 'CASH_GBP';
-                      const bCash = b.ticker === 'CASH' || b.ticker === 'CASH_GBP';
-                      if (aCash !== bCash) return aCash ? 1 : -1;
-                      const bv = b.value_gbp ?? 0;
-                      const av = a.value_gbp ?? 0;
-                      if (bv !== av) return bv - av;
-                      return (a.ticker ?? '').localeCompare(b.ticker ?? '');
-                    }).map(holding => (
-                      <HoldingRow
-                        key={holding.id}
-                        holding={holding}
-                        isManual={isManual}
-                        onEdit={setEditingHolding}
-                        onDeleted={onDataChanged}
-                        onShowHistory={setHistoryHolding}
-                      />
-                    ))}
+                    {(() => {
+                      const sortHoldings = (arr) => [...arr].sort((a, b) => {
+                        const aCash = a.ticker === 'CASH' || a.ticker === 'CASH_GBP';
+                        const bCash = b.ticker === 'CASH' || b.ticker === 'CASH_GBP';
+                        if (aCash !== bCash) return aCash ? 1 : -1;
+                        const bv = b.value_gbp ?? 0;
+                        const av = a.value_gbp ?? 0;
+                        if (bv !== av) return bv - av;
+                        return (a.ticker ?? '').localeCompare(b.ticker ?? '');
+                      });
+
+                      const isT212 = ['t212', 't212_invest'].includes(account.account_type);
+                      if (!isT212) {
+                        return sortHoldings(account.holdings).map(holding => (
+                          <HoldingRow
+                            key={holding.id}
+                            holding={holding}
+                            isManual={isManual}
+                            onEdit={setEditingHolding}
+                            onDeleted={onDataChanged}
+                            onShowHistory={setHistoryHolding}
+                          />
+                        ));
+                      }
+
+                      // Group T212 holdings by pie
+                      const pieMap = {};
+                      const flatHoldings = [];
+                      for (const h of account.holdings) {
+                        if (h.pie) {
+                          const key = h.pie.id;
+                          if (!pieMap[key]) pieMap[key] = { id: h.pie.id, name: h.pie.name, holdings: [] };
+                          pieMap[key].holdings.push(h);
+                        } else {
+                          flatHoldings.push(h);
+                        }
+                      }
+                      const pies = Object.values(pieMap).sort((a, b) => {
+                        const aTotal = a.holdings.reduce((s, h) => s + (h.value_gbp ?? 0), 0);
+                        const bTotal = b.holdings.reduce((s, h) => s + (h.value_gbp ?? 0), 0);
+                        return bTotal - aTotal;
+                      });
+
+                      const togglePie = (id) => setExpandedPies(prev => {
+                        const next = new Set(prev);
+                        next.has(id) ? next.delete(id) : next.add(id);
+                        return next;
+                      });
+
+                      return (
+                        <>
+                          {pies.map(pie => {
+                            const pieTotal = pie.holdings.reduce((s, h) => s + (h.value_gbp ?? 0), 0);
+                            const isOpen = expandedPies.has(pie.id);
+                            return (
+                              <React.Fragment key={`pie-${pie.id}`}>
+                                <tr
+                                  className="cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 transition-colors"
+                                  onClick={() => togglePie(pie.id)}
+                                >
+                                  <td colSpan="6" className="py-2 pl-3 pr-3">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        {isOpen ? <ChevronUp size={11} className="text-slate-500" /> : <ChevronDown size={11} className="text-slate-500" />}
+                                        <PieChart size={11} className="text-slate-500" />
+                                        <span className="text-xs font-semibold text-slate-200">{pie.name}</span>
+                                        <span className="text-xs text-slate-500">{pie.holdings.length} holding{pie.holdings.length !== 1 ? 's' : ''}</span>
+                                      </div>
+                                      <span className="font-mono text-xs font-semibold text-slate-300">{formatGBP(pieTotal)}</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isOpen && sortHoldings(pie.holdings).map(holding => (
+                                  <HoldingRow
+                                    key={holding.id || holding.ticker}
+                                    holding={holding}
+                                    isManual={isManual}
+                                    onEdit={setEditingHolding}
+                                    onDeleted={onDataChanged}
+                                    onShowHistory={setHistoryHolding}
+                                    indent
+                                  />
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
+                          {sortHoldings(flatHoldings).map(holding => (
+                            <HoldingRow
+                              key={holding.id || holding.ticker}
+                              holding={holding}
+                              isManual={isManual}
+                              onEdit={setEditingHolding}
+                              onDeleted={onDataChanged}
+                              onShowHistory={setHistoryHolding}
+                            />
+                          ))}
+                        </>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>

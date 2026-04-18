@@ -128,6 +128,7 @@ def portfolio_summary():
                             gain_loss_pct=gain_loss_pct,
                             last_holding_update=now,
                             freshness="green",
+                            pie=pos.get("pie"),
                         ))
 
                     # Also include any DB holdings not covered by T212 (manual additions)

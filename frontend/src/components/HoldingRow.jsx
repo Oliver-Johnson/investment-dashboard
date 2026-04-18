@@ -19,7 +19,7 @@ function formatNumber(n, decimals = 4) {
   });
 }
 
-export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onShowHistory }) {
+export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onShowHistory, indent = false }) {
   const [deleting, setDeleting] = useState(false);
   const price = holding.price_gbp ?? holding.current_price ?? 0;
   const value = holding.value_gbp ?? ((holding.unit_count ?? 0) * price);
@@ -39,7 +39,7 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onSho
 
   return (
     <tr className="group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors">
-      <td className="py-2.5 pl-3 pr-4">
+      <td className={`py-2.5 pr-4 ${indent ? 'pl-7' : 'pl-3'}`}>
         <button
           onClick={() => onShowHistory && onShowHistory(holding)}
           className="text-left group/name"
