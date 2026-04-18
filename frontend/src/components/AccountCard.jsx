@@ -119,9 +119,9 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
               </div>
             </div>
 
-            <div className="flex items-start gap-2">
-              <div className="text-right flex-shrink-0">
-                <div className="text-lg md:text-xl font-bold font-mono" style={{ color: colour }}>
+            <div className="flex items-start gap-2 flex-shrink-0">
+              <div className="text-right">
+                <div className="text-base sm:text-lg md:text-xl font-bold font-mono" style={{ color: colour }}>
                   {formatGBP(total)}
                 </div>
                 {hasGainLoss && (

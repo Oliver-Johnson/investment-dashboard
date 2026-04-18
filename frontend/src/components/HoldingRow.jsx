@@ -39,13 +39,13 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onSho
 
   return (
     <tr className={`group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors${isPieHolding ? ' bg-indigo-950/20' : ''}`}>
-      <td className={`py-2.5 pr-4 ${indent ? 'pl-7' : 'pl-3'}`}>
+      <td className={`py-2.5 pr-4 min-w-0 ${indent ? 'pl-7' : 'pl-3'}`}>
         <button
           onClick={() => onShowHistory && onShowHistory(holding)}
-          className="text-left group/name"
+          className="text-left group/name w-full"
           title="View price history"
         >
-          <span className="text-xs font-semibold text-slate-200 leading-tight block truncate max-w-[120px] sm:max-w-none group-hover/name:text-blue-400 transition-colors">
+          <span className="text-xs font-semibold text-slate-200 leading-tight block break-words group-hover/name:text-blue-400 transition-colors">
             {holding.display_name || holding.name || holding.ticker}
             {isPieHolding && holding.pie?.name && (
               <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-300 align-middle">

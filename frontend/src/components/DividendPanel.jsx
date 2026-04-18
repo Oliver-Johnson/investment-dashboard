@@ -85,8 +85,8 @@ export default function DividendPanel({ accounts }) {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 p-5 border-b border-slate-800">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 p-5 border-b border-slate-800">
+        <div className="flex items-center gap-2 min-w-0 sm:flex-1">
           <TrendingUp size={16} className="text-emerald-400 flex-shrink-0" />
           <h2 className="text-sm font-semibold text-slate-200">Dividend Income</h2>
           {!loading && (
