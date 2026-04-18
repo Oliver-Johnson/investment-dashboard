@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -33,13 +34,21 @@ def _auth_headers() -> dict:
 
 
 def _fetch_live_pnl() -> dict:
-    """Fetch live P&L data from eToro. Returns {positionID: {"netProfit": float, "currentRate": float, "currency": str}}.
-    Cached for 60 seconds."""
+    """Fetch live P&L data from eToro.
+
+    Returns two dicts: (by_position, by_instrument).
+    - by_position: {positionID: pnl_dict}
+    - by_instrument: {instrumentID: pnl_dict}
+
+    pnl_dict keys: netProfit, netProfitNative, currentRate, currentValueUSD, investedUSD, assetCurrencyId.
+    Cached for 60 seconds.
+    """
     now = time.time()
     if _live_pnl_cache["data"] is not None and now < _live_pnl_cache["expires"]:
         return _live_pnl_cache["data"]
 
-    result = {}
+    by_position = {}
+    by_instrument = {}
     endpoints = [
         f"{ETORO_BASE_URL}/api/v1/trading/info/real/pnl",
         f"{ETORO_BASE_URL}/api/v1/trading/info/pnl",
@@ -54,40 +63,55 @@ def _fetch_live_pnl() -> dict:
                 continue
             resp.raise_for_status()
             data = resp.json()
-            logging.warning("etoro _fetch_live_pnl: response keys=%s, type=%s", list(data.keys()) if isinstance(data, dict) else "list", type(data).__name__)
-            # Handle both list and dict response formats
-            positions = data if isinstance(data, list) else data.get("positions", data.get("items", []))
-            if isinstance(positions, dict):
-                # Could be a dict keyed by positionID
-                for pid_str, pdata in positions.items():
-                    try:
-                        pid = int(pid_str)
-                    except (ValueError, TypeError):
-                        continue
-                    result[pid] = {
-                        "netProfit": pdata.get("netProfit", 0),
-                        "currentRate": pdata.get("currentRate", 0),
-                        "currency": pdata.get("currency", "USD"),
-                    }
-            elif isinstance(positions, list):
-                for pos in positions:
-                    pid = pos.get("positionID") or pos.get("positionId")
-                    if pid:
-                        result[int(pid)] = {
-                            "netProfit": pos.get("netProfit", 0),
-                            "currentRate": pos.get("currentRate", 0),
-                            "currency": pos.get("currency", "USD"),
-                        }
-            if result:
-                logging.warning("etoro _fetch_live_pnl: got %d positions from %s", len(result), url)
+            logging.warning("etoro _fetch_live_pnl: response keys=%s, type=%s",
+                            list(data.keys()) if isinstance(data, dict) else "list",
+                            type(data).__name__)
+
+            # Navigate to clientPortfolio.positions (the actual API structure)
+            positions = []
+            if isinstance(data, dict):
+                cp = data.get("clientPortfolio")
+                if isinstance(cp, dict):
+                    positions = cp.get("positions", [])
+                if not positions:
+                    # Fallback: try top-level positions/items
+                    positions = data.get("positions", data.get("items", []))
+            elif isinstance(data, list):
+                positions = data
+
+            if positions:
+                logging.warning("etoro _fetch_live_pnl: first pos full structure: %s",
+                                str(positions[0])[:1000])
+
+            for pos in (positions if isinstance(positions, list) else []):
+                unrealized = pos.get("unrealizedPnL", {})
+                pnl_entry = {
+                    "netProfit": unrealized.get("pnL", pos.get("netProfit", 0)),
+                    "netProfitNative": unrealized.get("pnlAssetCurrency"),
+                    "currentRate": unrealized.get("closeRate", pos.get("currentRate", 0)),
+                    "currentValueUSD": unrealized.get("exposureInAccountCurrency"),
+                    "investedUSD": unrealized.get("marginInAccountCurrency"),
+                    "assetCurrencyId": unrealized.get("assetCurrencyId"),
+                }
+                pid = pos.get("positionID") or pos.get("positionId")
+                iid = pos.get("instrumentID") or pos.get("instrumentId")
+                if pid:
+                    by_position[int(pid)] = pnl_entry
+                if iid:
+                    by_instrument[int(iid)] = pnl_entry
+
+            if by_position or by_instrument:
+                logging.warning("etoro _fetch_live_pnl: got %d by-position, %d by-instrument from %s",
+                                len(by_position), len(by_instrument), url)
                 break
             else:
                 logging.warning("etoro _fetch_live_pnl: parsed 0 positions from %s, sample: %s",
-                             url, str(data)[:300])
+                                url, str(data)[:300])
         except Exception as e:
             logging.warning("etoro _fetch_live_pnl: %s failed: %s", url, e)
             continue
 
+    result = {"by_position": by_position, "by_instrument": by_instrument}
     _live_pnl_cache["data"] = result
     _live_pnl_cache["expires"] = time.time() + 60
     return result
@@ -437,30 +461,38 @@ def fetch_portfolio() -> list[dict]:
         return []
 
     # Fetch live P&L data and merge into positions (portfolio endpoint lacks netProfit/currentRate)
-    live_pnl = _fetch_live_pnl()
-    if live_pnl:
-        logging.info("etoro: merging live P&L for %d positions", len(live_pnl))
+    live_pnl_result = _fetch_live_pnl()
+    by_position = live_pnl_result.get("by_position", {})
+    by_instrument = live_pnl_result.get("by_instrument", {})
+
+    def _merge_live_pnl(pos):
+        """Merge live P&L into a position dict. Tries positionID first, then instrumentID."""
+        pid = pos.get("positionID") or pos.get("positionId")
+        iid = pos.get("instrumentID") or pos.get("instrumentId")
+        pnl = None
+        if pid and int(pid) in by_position:
+            pnl = by_position[int(pid)]
+        elif iid and int(iid) in by_instrument:
+            pnl = by_instrument[int(iid)]
+        if pnl:
+            pos["_live_pnl"] = pnl
+            if pnl.get("netProfit") is not None:
+                pos["netProfit"] = pnl["netProfit"]
+            if pnl.get("currentRate"):
+                pos["currentRate"] = pnl["currentRate"]
+            if pnl.get("currentValueUSD") is not None:
+                pos["currentValueUSD"] = pnl["currentValueUSD"]
+            if pnl.get("investedUSD") is not None:
+                pos["investedUSD"] = pnl["investedUSD"]
+
+    if by_position or by_instrument:
+        logging.info("etoro: merging live P&L for %d by-position, %d by-instrument",
+                     len(by_position), len(by_instrument))
         for pos in positions:
-            pid = pos.get("positionID") or pos.get("positionId")
-            if pid and int(pid) in live_pnl:
-                pnl = live_pnl[int(pid)]
-                if pnl.get("netProfit") is not None and "netProfit" not in pos:
-                    pos["netProfit"] = pnl["netProfit"]
-                if pnl.get("currentRate") and not pos.get("currentRate"):
-                    pos["currentRate"] = pnl["currentRate"]
-                if pnl.get("currency") and not pos.get("currency"):
-                    pos["currency"] = pnl["currency"]
+            _merge_live_pnl(pos)
         for mirror in mirrors:
             for pos in mirror.get("positions", []):
-                pid = pos.get("positionID") or pos.get("positionId")
-                if pid and int(pid) in live_pnl:
-                    pnl = live_pnl[int(pid)]
-                    if pnl.get("netProfit") is not None and "netProfit" not in pos:
-                        pos["netProfit"] = pnl["netProfit"]
-                    if pnl.get("currentRate") and not pos.get("currentRate"):
-                        pos["currentRate"] = pnl["currentRate"]
-                    if pnl.get("currency") and not pos.get("currency"):
-                        pos["currency"] = pnl["currency"]
+                _merge_live_pnl(pos)
     else:
         logging.info("etoro: no live P&L data available, using portfolio data as-is")
 
@@ -507,6 +539,25 @@ def fetch_portfolio() -> list[dict]:
             names = {iid: all_data[iid]["name"] for iid in instrument_ids if iid in all_data}
             tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
 
+    # Manual instrument name overrides from config file
+    still_missing = [iid for iid in instrument_ids if iid not in all_data or all_data[iid]["name"].startswith("eToro #")]
+    if still_missing:
+        try:
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "etoro_instrument_names.json")
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    manual = json.load(f)
+                for iid in still_missing:
+                    entry = manual.get(str(iid))
+                    if entry and isinstance(entry, dict) and "name" in entry:
+                        all_data[int(iid)] = {"name": entry["name"], "ticker": entry.get("ticker")}
+                        names[int(iid)] = entry["name"]
+                        if entry.get("ticker"):
+                            tickers[int(iid)] = entry["ticker"]
+                        logging.info("etoro: manual override for instrument %s: %s", iid, entry["name"])
+        except Exception as e:
+            logging.warning("etoro: failed to load manual instrument names: %s", e)
+
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     logging.debug("eToro fetch_portfolio: gbpusd=%.4f", float(gbpusd))
     results = []
@@ -540,18 +591,35 @@ def fetch_portfolio() -> list[dict]:
             raw_profit = None
         profit = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
 
-        current_value = invested + profit
-        price_native = (current_value / units) if units else Decimal("0")
+        # If we have live P&L data with USD values, use those directly
+        live = pos.get("_live_pnl")
+        usd_to_gbp = Decimal("1") / gbpusd
 
-        # Determine what currency amount/netProfit are reported in.
-        # eToro typically reports in account base currency (USD), but some positions
-        # carry a `currency` field indicating native instrument currency instead.
-        pos_currency = (pos.get("currency") or "USD").upper()
-        to_gbp = _pos_to_gbp(pos_currency)
-        logging.debug("eToro pos instrumentID=%s currency=%s to_gbp=%.6f", instrument_id, pos_currency, float(to_gbp))
+        if live and live.get("currentValueUSD") is not None:
+            # Live P&L gives us values in USD — convert to GBP
+            current_value_usd = Decimal(str(live["currentValueUSD"]))
+            market_value_gbp = current_value_usd * usd_to_gbp
+            net_profit_usd = Decimal(str(live.get("netProfit", 0)))
+            profit = net_profit_usd
+            invested_usd = Decimal(str(live.get("investedUSD", 0)))
+            current_value = current_value_usd
+            price_native = (current_value / units) if units else Decimal("0")
+            current_price_gbp = (market_value_gbp / units) if units else Decimal("0")
+            pos_currency = "USD"
+            to_gbp = usd_to_gbp
+        else:
+            current_value = invested + profit
+            price_native = (current_value / units) if units else Decimal("0")
 
-        market_value_gbp = current_value * to_gbp
-        current_price_gbp = price_native * to_gbp
+            # Determine what currency amount/netProfit are reported in.
+            pos_currency = (pos.get("currency") or "USD").upper()
+            to_gbp = _pos_to_gbp(pos_currency)
+
+            market_value_gbp = current_value * to_gbp
+            current_price_gbp = price_native * to_gbp
+
+        logging.debug("eToro pos instrumentID=%s currency=%s to_gbp=%.6f live=%s",
+                       instrument_id, pos_currency, float(to_gbp), bool(live))
 
         open_rate = Decimal(str(pos.get("openRate") or 0))
         current_rate_native = Decimal(str(pos.get("currentRate") or 0))
@@ -566,7 +634,10 @@ def fetch_portfolio() -> list[dict]:
             else:
                 avg_price_gbp = open_rate * to_gbp
 
-        net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
+        if live and live.get("netProfit") is not None:
+            net_profit_gbp = Decimal(str(live["netProfit"])) * usd_to_gbp
+        else:
+            net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
 
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
         ticker = tickers.get(instrument_id) or str(instrument_id)
@@ -607,14 +678,25 @@ def fetch_portfolio() -> list[dict]:
                 raw_profit = None
             profit = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
 
-            current_value = invested + profit
-            price_native = (current_value / units) if units else Decimal("0")
+            live = pos.get("_live_pnl")
+            usd_to_gbp = Decimal("1") / gbpusd
 
-            pos_currency = (pos.get("currency") or "USD").upper()
-            to_gbp = _pos_to_gbp(pos_currency)
-
-            market_value_gbp = current_value * to_gbp
-            current_price_gbp = price_native * to_gbp
+            if live and live.get("currentValueUSD") is not None:
+                current_value_usd = Decimal(str(live["currentValueUSD"]))
+                market_value_gbp = current_value_usd * usd_to_gbp
+                profit = Decimal(str(live.get("netProfit", 0)))
+                current_value = current_value_usd
+                price_native = (current_value / units) if units else Decimal("0")
+                current_price_gbp = (market_value_gbp / units) if units else Decimal("0")
+                pos_currency = "USD"
+                to_gbp = usd_to_gbp
+            else:
+                current_value = invested + profit
+                price_native = (current_value / units) if units else Decimal("0")
+                pos_currency = (pos.get("currency") or "USD").upper()
+                to_gbp = _pos_to_gbp(pos_currency)
+                market_value_gbp = current_value * to_gbp
+                current_price_gbp = price_native * to_gbp
 
             open_rate = Decimal(str(pos.get("openRate") or 0))
             current_rate_native = Decimal(str(pos.get("currentRate") or 0))
@@ -627,7 +709,10 @@ def fetch_portfolio() -> list[dict]:
                 else:
                     avg_price_gbp = open_rate * to_gbp
 
-            net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
+            if live and live.get("netProfit") is not None:
+                net_profit_gbp = Decimal(str(live["netProfit"])) * usd_to_gbp
+            else:
+                net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
             results.append({
                 "ticker": tickers.get(instrument_id) or str(instrument_id),

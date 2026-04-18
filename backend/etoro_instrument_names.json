@@ -1,0 +1,5 @@
+{
+  "_comment": "Manual overrides for eToro instrument names. Format: instrumentID (as string) -> {name, ticker}. Used when the API cannot resolve an instrument.",
+  "1019433": {"name": "Unknown (1019433)", "ticker": "1019433"},
+  "1052836": {"name": "Unknown (1052836)", "ticker": "1052836"}
+}
