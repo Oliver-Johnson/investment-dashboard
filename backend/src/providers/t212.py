@@ -219,10 +219,21 @@ def fetch_pies(account: str = "isa") -> dict:
             or f"Pie {pie_id}"
         )
 
-        for inst in detail.get("instruments", []):
-            ticker = inst.get("ticker") or (inst.get("result") or {}).get("ticker") or ""
-            if ticker:
-                ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
+        instruments = detail.get("instruments") or []
+
+        # Instruments is normally a list of objects with a "ticker" key.
+        # For copied/imported pies T212 sometimes returns an empty instruments list
+        # but the list-level "instrumentShares" dict (ticker -> share%) is populated.
+        if instruments:
+            for inst in instruments:
+                ticker = inst.get("ticker") or ""
+                if ticker:
+                    ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
+        else:
+            # Fall back to instrumentShares from the list-level pie object
+            for ticker in (pie.get("instrumentShares") or {}):
+                if ticker:
+                    ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
 
     cache["data"] = ticker_map
     cache["expires"] = now + 300

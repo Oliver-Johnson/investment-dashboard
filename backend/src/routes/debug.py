@@ -221,3 +221,58 @@ def debug_t212():
         return {"positions": positions[:3]}
     except requests.RequestException as e:
         return {"error": str(e)}
+
+
+@router.get("/t212-pies")
+def debug_t212_pies():
+    """Return raw T212 pies list + per-pie detail for debugging copied/imported pies."""
+    import logging
+    from src.providers.t212 import _CREDS, _auth_header
+
+    logger = logging.getLogger(__name__)
+
+    creds = _CREDS["isa"]
+    if not creds["api_key"]:
+        return {"error": "T212_API_KEY not set"}
+
+    headers = _auth_header("isa")
+    base_url = creds["base_url"]
+
+    # Fetch the pie list
+    try:
+        list_resp = requests.get(f"{base_url}/equity/pies", headers=headers, timeout=15)
+        list_resp.raise_for_status()
+        pies_list = list_resp.json()
+    except requests.RequestException as e:
+        return {"error": f"Failed to fetch /equity/pies: {e}"}
+
+    logger.info("T212 /equity/pies raw response: %s", pies_list)
+
+    # Fetch detail for each pie
+    pie_details = []
+    for pie in pies_list:
+        pie_id = pie.get("id")
+        try:
+            detail_resp = requests.get(
+                f"{base_url}/equity/pies/{pie_id}",
+                headers=headers,
+                timeout=15,
+            )
+            detail_resp.raise_for_status()
+            detail = detail_resp.json()
+        except requests.RequestException as e:
+            detail = {"error": str(e)}
+
+        logger.info("T212 /equity/pies/%s raw response: %s", pie_id, detail)
+        pie_details.append({
+            "list_entry": pie,
+            "detail": detail,
+            "instruments_count": len(detail.get("instruments", [])) if isinstance(detail.get("instruments"), list)
+                else len(detail.get("instruments", {})) if isinstance(detail.get("instruments"), dict)
+                else 0,
+        })
+
+    return {
+        "total_pies": len(pies_list),
+        "pies": pie_details,
+    }
