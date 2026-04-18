@@ -227,22 +227,35 @@ def fetch_pies(account: str = "isa") -> dict:
         logging.debug("T212 pie list has no instrumentShares; fetching per-pie detail endpoints")
         for i, pie in enumerate(pies):
             pie_id = pie.get("id")
+            if i > 0:
+                time.sleep(2)
+            detail = None
+            for attempt in range(2):
+                try:
+                    detail_resp = requests.get(
+                        f"{creds['base_url']}/equity/pies/{pie_id}",
+                        headers=headers,
+                        timeout=15,
+                    )
+                    if detail_resp.status_code == 429:
+                        logging.warning("T212 pie %s detail: 429 rate limited (attempt %d), waiting 3s", pie_id, attempt + 1)
+                        time.sleep(3)
+                        continue
+                    detail_resp.raise_for_status()
+                    detail = detail_resp.json()
+                    logging.debug("T212 /equity/pies/%s detail: %s", pie_id, detail)
+                    break
+                except requests.RequestException as e:
+                    logging.warning("T212 pie %s detail fetch failed: %s", pie_id, e)
+                    break
+            # Get name from detail settings first, fall back to list entry
             pie_name = (
-                (pie.get("settings") or {}).get("name")
+                ((detail.get("settings") or {}).get("name") if detail else None)
+                or (pie.get("settings") or {}).get("name")
                 or pie.get("name")
                 or f"Pie {pie_id}"
             )
-            if i > 0:
-                time.sleep(1.5)
-            try:
-                detail_resp = requests.get(
-                    f"{creds['base_url']}/equity/pies/{pie_id}",
-                    headers=headers,
-                    timeout=15,
-                )
-                detail_resp.raise_for_status()
-                detail = detail_resp.json()
-                logging.debug("T212 /equity/pies/%s detail: %s", pie_id, detail)
+            if detail:
                 instruments = detail.get("instruments") or {}
                 if isinstance(instruments, dict):
                     for ticker in instruments:
@@ -253,8 +266,6 @@ def fetch_pies(account: str = "isa") -> dict:
                         ticker = inst.get("ticker") or inst.get("code")
                         if ticker:
                             ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
-            except requests.RequestException as e:
-                logging.warning("T212 pie %s detail fetch failed: %s", pie_id, e)
 
     # Only cache non-empty results to allow retries on transient failures
     if ticker_map:
