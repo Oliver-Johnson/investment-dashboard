@@ -5,6 +5,7 @@ from src.db import get_db
 
 CACHE_TTL_MINUTES = 15
 _gbpusd_cache: dict = {}
+_fx_cache: dict = {}
 
 
 def _get_gbpusd_rate() -> float:
@@ -33,6 +34,43 @@ def _get_gbpusd_rate() -> float:
         rate = (cached["value"] if cached else 1.27)
 
     _gbpusd_cache["rate"] = {"value": rate, "fetched": now}
+    return rate
+
+
+def _get_rate_to_gbp(currency: str) -> float:
+    """Return the rate: how many GBP 1 unit of `currency` buys.
+    Cached for 60 seconds. Falls back to stale cache, then USD-based estimate."""
+    currency = (currency or "USD").upper()
+    if currency == "GBP":
+        return 1.0
+    if currency in ("GBX", "GBP"):
+        return 0.01 if currency == "GBX" else 1.0
+    if currency == "USD":
+        return 1.0 / _get_gbpusd_rate()
+
+    now = datetime.utcnow()
+    cached = _fx_cache.get(currency)
+    if cached and (now - cached["fetched"]).total_seconds() < 60:
+        return cached["value"]
+
+    rate = None
+    try:
+        rate = yf.Ticker(f"{currency}GBP=X").fast_info["lastPrice"]
+    except Exception:
+        pass
+
+    if not rate:
+        try:
+            hist = yf.Ticker(f"{currency}GBP=X").history(period="1d")
+            if not hist.empty:
+                rate = float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
+
+    if not rate:
+        rate = cached["value"] if cached else 1.0 / _get_gbpusd_rate()
+
+    _fx_cache[currency] = {"value": rate, "fetched": now}
     return rate
 
 

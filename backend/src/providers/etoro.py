@@ -1,10 +1,11 @@
+import logging
 import os
 import time
 import threading
 import uuid
 import requests
 from decimal import Decimal
-from src.providers.yfinance_client import _get_gbpusd_rate
+from src.providers.yfinance_client import _get_gbpusd_rate, _get_rate_to_gbp
 
 # 5-minute portfolio cache to avoid slow repeated eToro API calls
 _portfolio_cache: dict = {"data": None, "expires": 0.0}
@@ -308,19 +309,27 @@ def fetch_portfolio() -> list[dict]:
     tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
 
     gbpusd = Decimal(str(_get_gbpusd_rate()))
+    logging.debug("eToro fetch_portfolio: gbpusd=%.4f", float(gbpusd))
     results = []
+
+    def _pos_to_gbp(pos_currency: str) -> Decimal:
+        """Return conversion rate: 1 unit of pos_currency → GBP."""
+        c = (pos_currency or "USD").upper()
+        if not c or c == "USD":
+            return Decimal("1") / gbpusd
+        if c == "GBP":
+            return Decimal("1")
+        return Decimal(str(_get_rate_to_gbp(c)))
 
     for pos in positions:
         instrument_id = int(pos.get("instrumentID", 0))
         units = Decimal(str(pos.get("units", 0)))
-        # amount = invested USD value of the position (cost basis).
-        invested_usd = Decimal(str(
+        invested = Decimal(str(
             pos.get("amount")
             or pos.get("unitsBaseValueDollars", 0)
             or 0
         ))
 
-        # Extract P&L first — eToro reports netProfit in USD (account base currency).
         # Use explicit key-presence check so that netProfit=0.0 is preserved.
         if "netProfit" in pos:
             raw_profit = pos["netProfit"]
@@ -330,28 +339,35 @@ def fetch_portfolio() -> list[dict]:
             raw_profit = pos["pnl"]
         else:
             raw_profit = None
-        profit_usd = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
+        profit = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
 
-        # Current market value = invested amount + P&L (both in USD).
-        current_value_usd = invested_usd + profit_usd
-        price_usd = (current_value_usd / units) if units else Decimal("0")
+        current_value = invested + profit
+        price_native = (current_value / units) if units else Decimal("0")
 
-        market_value_gbp = current_value_usd / gbpusd
-        current_price_gbp = price_usd / gbpusd
+        # Determine what currency amount/netProfit are reported in.
+        # eToro typically reports in account base currency (USD), but some positions
+        # carry a `currency` field indicating native instrument currency instead.
+        pos_currency = (pos.get("currency") or "USD").upper()
+        to_gbp = _pos_to_gbp(pos_currency)
+        logging.debug("eToro pos instrumentID=%s currency=%s to_gbp=%.6f", instrument_id, pos_currency, float(to_gbp))
+
+        market_value_gbp = current_value * to_gbp
+        current_price_gbp = price_native * to_gbp
 
         open_rate = Decimal(str(pos.get("openRate") or 0))
-        # currentRate is the current price in the instrument's native currency.
-        # The ratio current_price_gbp/currentRate converts native → GBP.
         current_rate_native = Decimal(str(pos.get("currentRate") or 0))
         avg_price_gbp = None
         if open_rate > 0:
-            if current_rate_native > 0 and current_price_gbp > 0:
+            if pos_currency != "USD" and current_rate_native > 0:
+                # Rates are in the same currency as amounts — use direct conversion.
+                avg_price_gbp = open_rate * to_gbp
+            elif current_rate_native > 0 and current_price_gbp > 0:
+                # USD amounts: use price ratio to infer native→GBP conversion.
                 avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
             else:
-                avg_price_gbp = open_rate / gbpusd  # fallback: assume USD
+                avg_price_gbp = open_rate * to_gbp
 
-        # P&L conversion: netProfit is in USD, divide by GBP/USD to get GBP.
-        net_profit_gbp = (profit_usd / gbpusd) if raw_profit is not None else None
+        net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
 
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
         ticker = tickers.get(instrument_id) or str(instrument_id)
@@ -360,20 +376,20 @@ def fetch_portfolio() -> list[dict]:
             "ticker": ticker,
             "display_name": display_name,
             "quantity": units,
-            "currency": "USD",
+            "currency": "GBP",
             "current_price_gbp": current_price_gbp,
             "market_value_gbp": market_value_gbp,
             "avg_price_gbp": avg_price_gbp,
             "net_profit_gbp": net_profit_gbp,
         })
 
-    # Also include copytrade (mirror) positions — same P&L fix as direct positions.
+    # Also include copytrade (mirror) positions — same currency-aware P&L fix.
     for mirror in mirrors:
         mirror_name = mirror.get("parentUsername", "Copy Trade")
         for pos in mirror.get("positions", []):
             instrument_id = int(pos.get("instrumentID", 0))
             units = Decimal(str(pos.get("units", 0)))
-            invested_usd = Decimal(str(pos.get("amount") or pos.get("unitsBaseValueDollars", 0) or 0))
+            invested = Decimal(str(pos.get("amount") or pos.get("unitsBaseValueDollars", 0) or 0))
 
             if "netProfit" in pos:
                 raw_profit = pos["netProfit"]
@@ -383,29 +399,35 @@ def fetch_portfolio() -> list[dict]:
                 raw_profit = pos["pnl"]
             else:
                 raw_profit = None
-            profit_usd = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
+            profit = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
 
-            current_value_usd = invested_usd + profit_usd
-            price_usd = (current_value_usd / units) if units else Decimal("0")
-            market_value_gbp = current_value_usd / gbpusd
-            current_price_gbp = price_usd / gbpusd
+            current_value = invested + profit
+            price_native = (current_value / units) if units else Decimal("0")
+
+            pos_currency = (pos.get("currency") or "USD").upper()
+            to_gbp = _pos_to_gbp(pos_currency)
+
+            market_value_gbp = current_value * to_gbp
+            current_price_gbp = price_native * to_gbp
 
             open_rate = Decimal(str(pos.get("openRate") or 0))
             current_rate_native = Decimal(str(pos.get("currentRate") or 0))
             avg_price_gbp = None
             if open_rate > 0:
-                if current_rate_native > 0 and current_price_gbp > 0:
+                if pos_currency != "USD" and current_rate_native > 0:
+                    avg_price_gbp = open_rate * to_gbp
+                elif current_rate_native > 0 and current_price_gbp > 0:
                     avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
                 else:
-                    avg_price_gbp = open_rate / gbpusd
+                    avg_price_gbp = open_rate * to_gbp
 
-            net_profit_gbp = (profit_usd / gbpusd) if raw_profit is not None else None
+            net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
             results.append({
                 "ticker": tickers.get(instrument_id) or str(instrument_id),
                 "display_name": f"{display_name} (via {mirror_name})",
                 "quantity": units,
-                "currency": "USD",
+                "currency": "GBP",
                 "current_price_gbp": current_price_gbp,
                 "market_value_gbp": market_value_gbp,
                 "avg_price_gbp": avg_price_gbp,

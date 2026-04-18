@@ -178,7 +178,8 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
 
 def fetch_pies(account: str = "isa") -> dict:
     """Fetch T212 pies and return {ticker: {pieId, pieName}} map. Cached 5 min.
-    Uses only the single GET /equity/pies list request — no per-pie detail calls."""
+    Tries the single GET /equity/pies list first; falls back to per-pie detail calls
+    (with 1.5s sleep between each) when the list response lacks instrumentShares."""
     cache = _pies_cache[account]
     now = time.time()
     if cache["data"] is not None and now < cache["expires"]:
@@ -189,33 +190,76 @@ def fetch_pies(account: str = "isa") -> dict:
         return {}
 
     headers = _auth_header(account)
-    try:
-        resp = requests.get(f"{creds['base_url']}/equity/pies", headers=headers, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException:
+
+    # Fetch pie list with one retry on transient failure
+    pies = None
+    for attempt in range(2):
+        try:
+            resp = requests.get(f"{creds['base_url']}/equity/pies", headers=headers, timeout=15)
+            resp.raise_for_status()
+            pies = resp.json()
+            break
+        except requests.RequestException:
+            if attempt == 0:
+                time.sleep(0.5)
+
+    if pies is None:
         return cache["data"] or {}
 
-    pies = resp.json()
+    logging.debug("T212 /equity/pies list response: %s", pies)
+
     ticker_map: dict = {}
+    has_instrument_shares = any(pie.get("instrumentShares") for pie in pies)
 
-    for pie in pies:
-        pie_id = pie.get("id")
-        pie_name = (
-            (pie.get("settings") or {}).get("name")
-            or pie.get("name")
-            or f"Pie {pie_id}"
-        )
-
-        instrument_shares = pie.get("instrumentShares") or {}
-        if instrument_shares:
-            for ticker in instrument_shares:
+    if has_instrument_shares:
+        for pie in pies:
+            pie_id = pie.get("id")
+            pie_name = (
+                (pie.get("settings") or {}).get("name")
+                or pie.get("name")
+                or f"Pie {pie_id}"
+            )
+            for ticker in (pie.get("instrumentShares") or {}):
                 if ticker:
                     ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
-        else:
-            logging.warning("T212 pie %s: no instrumentShares in list response", pie_id)
+    else:
+        # List response lacks instrumentShares — fetch per-pie detail with rate-limit protection
+        logging.debug("T212 pie list has no instrumentShares; fetching per-pie detail endpoints")
+        for i, pie in enumerate(pies):
+            pie_id = pie.get("id")
+            pie_name = (
+                (pie.get("settings") or {}).get("name")
+                or pie.get("name")
+                or f"Pie {pie_id}"
+            )
+            if i > 0:
+                time.sleep(1.5)
+            try:
+                detail_resp = requests.get(
+                    f"{creds['base_url']}/equity/pies/{pie_id}",
+                    headers=headers,
+                    timeout=15,
+                )
+                detail_resp.raise_for_status()
+                detail = detail_resp.json()
+                logging.debug("T212 /equity/pies/%s detail: %s", pie_id, detail)
+                instruments = detail.get("instruments") or {}
+                if isinstance(instruments, dict):
+                    for ticker in instruments:
+                        if ticker:
+                            ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
+                elif isinstance(instruments, list):
+                    for inst in instruments:
+                        ticker = inst.get("ticker") or inst.get("code")
+                        if ticker:
+                            ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
+            except requests.RequestException as e:
+                logging.warning("T212 pie %s detail fetch failed: %s", pie_id, e)
 
-    cache["data"] = ticker_map
-    cache["expires"] = now + 300
+    # Only cache non-empty results to allow retries on transient failures
+    if ticker_map:
+        cache["data"] = ticker_map
+        cache["expires"] = now + 300
     return ticker_map
 
 
