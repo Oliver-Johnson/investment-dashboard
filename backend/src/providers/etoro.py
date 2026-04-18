@@ -78,7 +78,7 @@ def _fetch_all_instrument_data() -> dict:
         instruments = data.get("instrumentDisplayDatas", data if isinstance(data, list) else [])
         if instruments:
             result = {
-                inst["instrumentId"]: _extract(inst, inst["instrumentId"])
+                int(inst["instrumentId"]): _extract(inst, inst["instrumentId"])
                 for inst in instruments
                 if inst.get("instrumentId")
             }
@@ -128,10 +128,11 @@ def _fetch_all_instrument_data() -> dict:
                     except Exception:
                         pass
 
-        # Portfolio positions use instrumentID (numeric); search results expose this
-        # as either "instrumentId" (no "internal" prefix) or "internalInstrumentId".
+        # Portfolio positions use instrumentID (numeric int); search results expose this
+        # as either "instrumentId" or "internalInstrumentId" — normalise to int to avoid
+        # str/int key mismatches during lookup.
         return {
-            (inst.get("instrumentId") or inst.get("internalInstrumentId")): _extract(
+            int(inst.get("instrumentId") or inst.get("internalInstrumentId")): _extract(
                 inst, inst.get("instrumentId") or inst.get("internalInstrumentId")
             )
             for inst in all_items
@@ -240,12 +241,13 @@ def fetch_portfolio() -> list[dict]:
     if not positions and not mirrors:
         return []
 
-    # Collect ALL instrument IDs (direct + mirror positions) before fetching names
-    all_instrument_ids = {pos.get("instrumentID") for pos in positions if pos.get("instrumentID")}
+    # Collect ALL instrument IDs (direct + mirror positions) before fetching names.
+    # Normalise to int to avoid str/int key mismatches between API responses.
+    all_instrument_ids = {int(pos["instrumentID"]) for pos in positions if pos.get("instrumentID")}
     for mirror in mirrors:
         for pos in mirror.get("positions", []):
             if pos.get("instrumentID"):
-                all_instrument_ids.add(pos["instrumentID"])
+                all_instrument_ids.add(int(pos["instrumentID"]))
 
     instrument_ids = tuple(sorted(all_instrument_ids))
     # Block until instrument data is fully loaded (only caches on success, retries on failure)
@@ -254,40 +256,49 @@ def fetch_portfolio() -> list[dict]:
     names = {iid: all_data[iid]["name"] for iid in instrument_ids if iid in all_data}
     tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
 
+    # Targeted search fallback for any instrument IDs not found in bulk data.
+    # Some instruments (direct holdings, delisted, etc.) may be missing from the
+    # instruments/search endpoints but can still be found via individual search.
+    missing_ids = [iid for iid in instrument_ids if iid not in all_data]
+    if missing_ids:
+        logger.info("etoro: %d instrument IDs not in bulk data, trying targeted search: %s", len(missing_ids), missing_ids)
+        for mid in missing_ids:
+            try:
+                r = requests.get(
+                    f"{ETORO_BASE_URL}/api/v1/market-data/search",
+                    params={"text": str(mid), "page": 1, "pageSize": 10},
+                    headers=_auth_headers(),
+                    timeout=15,
+                )
+                r.raise_for_status()
+                items = r.json().get("items", [])
+                for item in items:
+                    item_id = int(item.get("instrumentId") or item.get("internalInstrumentId") or 0)
+                    if item_id == mid:
+                        extracted = _extract(item, item_id)
+                        names[mid] = extracted["name"]
+                        if extracted.get("ticker"):
+                            tickers[mid] = extracted["ticker"]
+                        logger.info("etoro: resolved instrument %d → %s via targeted search", mid, extracted["name"])
+                        break
+            except Exception as exc:
+                logger.warning("etoro: targeted search for instrument %d failed: %s", mid, exc)
+
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     results = []
 
     for pos in positions:
-        instrument_id = pos.get("instrumentID", 0)
+        instrument_id = int(pos.get("instrumentID", 0))
         units = Decimal(str(pos.get("units", 0)))
-        # amount = current USD value of position; unitsBaseValueDollars = unit-level value
-        value_usd = Decimal(str(
+        # amount = invested USD value of the position (cost basis).
+        invested_usd = Decimal(str(
             pos.get("amount")
             or pos.get("unitsBaseValueDollars", 0)
             or 0
         ))
-        # Derive price per unit from value / units (avoid div by zero)
-        price_usd = (value_usd / units) if units else Decimal("0")
 
-        market_value_gbp = value_usd / gbpusd
-        current_price_gbp = price_usd / gbpusd
-
-        open_rate = Decimal(str(pos.get("openRate") or 0))
-        # currentRate is the current price in the instrument's native currency (e.g. SEK for SIVE.ST).
-        # Use it to convert openRate to GBP via the ratio current_price_gbp/currentRate,
-        # which handles any native currency correctly (SEK, EUR, etc.), not just USD.
-        current_rate_native = Decimal(str(pos.get("currentRate") or 0))
-        avg_price_gbp = None
-        if open_rate > 0:
-            if current_rate_native > 0 and current_price_gbp > 0:
-                avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
-            else:
-                avg_price_gbp = open_rate / gbpusd  # fallback: assume USD
-
-        # eToro exposes realised+unrealised P&L directly as netProfit, in the instrument's
-        # native currency (SEK for SIVE.ST, EUR for European stocks, USD for US stocks, etc.).
-        # Use explicit key-presence check (not `or`) so that netProfit=0.0 is preserved
-        # rather than falling through to `profit`/`pnl` which may contain non-P&L values.
+        # Extract P&L first — eToro reports netProfit in USD (account base currency).
+        # Use explicit key-presence check so that netProfit=0.0 is preserved.
         if "netProfit" in pos:
             raw_profit = pos["netProfit"]
         elif "profit" in pos:
@@ -296,21 +307,30 @@ def fetch_portfolio() -> list[dict]:
             raw_profit = pos["pnl"]
         else:
             raw_profit = None
-        if raw_profit is not None:
-            profit_decimal = Decimal(str(raw_profit))
+        profit_usd = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
+
+        # Current market value = invested amount + P&L (both in USD).
+        current_value_usd = invested_usd + profit_usd
+        price_usd = (current_value_usd / units) if units else Decimal("0")
+
+        market_value_gbp = current_value_usd / gbpusd
+        current_price_gbp = price_usd / gbpusd
+
+        open_rate = Decimal(str(pos.get("openRate") or 0))
+        # currentRate is the current price in the instrument's native currency.
+        # The ratio current_price_gbp/currentRate converts native → GBP.
+        current_rate_native = Decimal(str(pos.get("currentRate") or 0))
+        avg_price_gbp = None
+        if open_rate > 0:
             if current_rate_native > 0 and current_price_gbp > 0:
-                # Convert from native currency to GBP using the same ratio as avg_price_gbp.
-                # This handles SEK, EUR, USD etc. correctly without needing explicit FX lookups.
-                native_to_gbp = current_price_gbp / current_rate_native
-                net_profit_gbp = profit_decimal * native_to_gbp
+                avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
             else:
-                net_profit_gbp = profit_decimal / gbpusd  # fallback: assume USD
-        else:
-            net_profit_gbp = None
+                avg_price_gbp = open_rate / gbpusd  # fallback: assume USD
+
+        # P&L conversion: netProfit is in USD, divide by GBP/USD to get GBP.
+        net_profit_gbp = (profit_usd / gbpusd) if raw_profit is not None else None
 
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
-        # Use the resolved ticker symbol from eToro instrument data; fall back to numeric ID
-        # if the instruments cache hasn't loaded yet (will resolve on next portfolio fetch).
         ticker = tickers.get(instrument_id) or str(instrument_id)
 
         results.append({
@@ -324,24 +344,14 @@ def fetch_portfolio() -> list[dict]:
             "net_profit_gbp": net_profit_gbp,
         })
 
-    # Also include copytrade (mirror) positions
+    # Also include copytrade (mirror) positions — same P&L fix as direct positions.
     for mirror in mirrors:
         mirror_name = mirror.get("parentUsername", "Copy Trade")
         for pos in mirror.get("positions", []):
-            instrument_id = pos.get("instrumentID", 0)
+            instrument_id = int(pos.get("instrumentID", 0))
             units = Decimal(str(pos.get("units", 0)))
-            value_usd = Decimal(str(pos.get("amount") or pos.get("unitsBaseValueDollars", 0) or 0))
-            price_usd = (value_usd / units) if units else Decimal("0")
-            market_value_gbp = value_usd / gbpusd
-            current_price_gbp = price_usd / gbpusd
-            open_rate = Decimal(str(pos.get("openRate") or 0))
-            current_rate_native = Decimal(str(pos.get("currentRate") or 0))
-            avg_price_gbp = None
-            if open_rate > 0:
-                if current_rate_native > 0 and current_price_gbp > 0:
-                    avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
-                else:
-                    avg_price_gbp = open_rate / gbpusd
+            invested_usd = Decimal(str(pos.get("amount") or pos.get("unitsBaseValueDollars", 0) or 0))
+
             if "netProfit" in pos:
                 raw_profit = pos["netProfit"]
             elif "profit" in pos:
@@ -350,15 +360,23 @@ def fetch_portfolio() -> list[dict]:
                 raw_profit = pos["pnl"]
             else:
                 raw_profit = None
-            if raw_profit is not None:
-                profit_decimal = Decimal(str(raw_profit))
+            profit_usd = Decimal(str(raw_profit)) if raw_profit is not None else Decimal("0")
+
+            current_value_usd = invested_usd + profit_usd
+            price_usd = (current_value_usd / units) if units else Decimal("0")
+            market_value_gbp = current_value_usd / gbpusd
+            current_price_gbp = price_usd / gbpusd
+
+            open_rate = Decimal(str(pos.get("openRate") or 0))
+            current_rate_native = Decimal(str(pos.get("currentRate") or 0))
+            avg_price_gbp = None
+            if open_rate > 0:
                 if current_rate_native > 0 and current_price_gbp > 0:
-                    native_to_gbp = current_price_gbp / current_rate_native
-                    net_profit_gbp = profit_decimal * native_to_gbp
+                    avg_price_gbp = open_rate * (current_price_gbp / current_rate_native)
                 else:
-                    net_profit_gbp = profit_decimal / gbpusd
-            else:
-                net_profit_gbp = None
+                    avg_price_gbp = open_rate / gbpusd
+
+            net_profit_gbp = (profit_usd / gbpusd) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
             results.append({
                 "ticker": tickers.get(instrument_id) or str(instrument_id),
