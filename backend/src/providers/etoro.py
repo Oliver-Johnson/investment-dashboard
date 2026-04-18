@@ -72,7 +72,10 @@ def _fetch_live_pnl() -> dict:
             if isinstance(data, dict):
                 cp = data.get("clientPortfolio")
                 if isinstance(cp, dict):
-                    positions = cp.get("positions", [])
+                    positions = list(cp.get("positions", []))
+                    # Also include mirror (copy trade) sub-positions so they get live P&L
+                    for mirror in cp.get("mirrors", []):
+                        positions.extend(mirror.get("positions", []))
                 if not positions:
                     # Fallback: try top-level positions/items
                     positions = data.get("positions", data.get("items", []))
@@ -575,6 +578,9 @@ def fetch_portfolio() -> list[dict]:
             return Decimal("1") / gbpusd
         if c == "GBP":
             return Decimal("1")
+        if c in ("GBX", "GBP_PENCE"):
+            # GBX = pence (1/100 of a pound)
+            return Decimal("0.01")
         return Decimal(str(_get_rate_to_gbp(c)))
 
     for pos in positions:
