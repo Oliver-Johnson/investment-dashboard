@@ -190,6 +190,110 @@ def etoro_positions_raw_api():
         return {"error": str(e)}
 
 
+@router.get("/etoro-portfolio")
+def debug_etoro_portfolio():
+    """Diagnostic: raw positions, instrument data, gbpusd rate, and P&L calculation trace."""
+    from src.providers import etoro as etoro_module
+    from src.providers.yfinance_client import _get_gbpusd_rate, _get_rate_to_gbp
+
+    # Fetch raw portfolio from eToro API
+    try:
+        resp = requests.get(
+            f"{ETORO_BASE_URL}/api/v1/trading/info/portfolio",
+            headers=_etoro_headers(), timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        return {"error": f"portfolio fetch failed: {e}"}
+
+    cp = data.get("clientPortfolio", {})
+    positions = cp.get("positions", [])
+    first5 = positions[:5]
+    instrument_ids = [int(p["instrumentID"]) for p in first5 if p.get("instrumentID")]
+
+    # Try POST /api/v2/instruments for those IDs
+    post_result = {}
+    try:
+        post_resp = requests.post(
+            "https://api.etoro.com/api/v2/instruments",
+            json={"instrumentIds": instrument_ids},
+            headers=_etoro_headers(), timeout=15,
+        )
+        post_result = {
+            "status": post_resp.status_code,
+            "body": post_resp.json() if post_resp.ok else post_resp.text[:500],
+        }
+    except Exception as e:
+        post_result = {"error": str(e)}
+
+    # gbpusd rate
+    try:
+        gbpusd = _get_gbpusd_rate()
+    except Exception as e:
+        gbpusd = f"error: {e}"
+
+    # Per-position summary with name resolution status from cache
+    cached_data = etoro_module._instrument_data_cache or {}
+    positions_summary = []
+    for p in first5:
+        iid = int(p.get("instrumentID", 0))
+        inst_info = cached_data.get(iid, {})
+        resolved_name = inst_info.get("name", "")
+        positions_summary.append({
+            "instrumentID": iid,
+            "currency": p.get("currency"),
+            "amount": p.get("amount"),
+            "netProfit": p.get("netProfit"),
+            "currentRate": p.get("currentRate"),
+            "openRate": p.get("openRate"),
+            "units": p.get("units"),
+            "name_from_cache": resolved_name or None,
+            "ticker_from_cache": inst_info.get("ticker"),
+            "name_resolved": bool(resolved_name and not resolved_name.startswith("eToro #")),
+        })
+
+    # P&L calculation trace for first non-GBP position
+    pnl_trace = None
+    for p in first5:
+        pos_currency = (p.get("currency") or "USD").upper()
+        if pos_currency == "GBP":
+            continue
+        iid = int(p.get("instrumentID", 0))
+        try:
+            if pos_currency == "USD":
+                to_gbp = 1.0 / gbpusd if isinstance(gbpusd, (int, float)) else None
+            else:
+                to_gbp = _get_rate_to_gbp(pos_currency)
+            invested = float(p.get("amount") or 0)
+            net_profit = float(p.get("netProfit") or 0)
+            pnl_trace = {
+                "instrumentID": iid,
+                "pos_currency": pos_currency,
+                "gbpusd_rate": gbpusd,
+                "to_gbp_rate": to_gbp,
+                "invested_native": invested,
+                "netProfit_native": net_profit,
+                "pnl_gbp_calc": net_profit * to_gbp if to_gbp else None,
+                "market_value_gbp_calc": (invested + net_profit) * to_gbp if to_gbp else None,
+            }
+        except Exception as e:
+            pnl_trace = {"error": str(e), "instrumentID": iid, "currency": pos_currency}
+        break
+
+    return {
+        "first_5_positions_raw": first5,
+        "positions_summary": positions_summary,
+        "instrument_ids_from_first_5": instrument_ids,
+        "post_instruments_result": post_result,
+        "gbpusd_rate": gbpusd,
+        "instrument_cache_populated": etoro_module._instrument_data_cache is not None,
+        "instrument_cache_size": len(etoro_module._instrument_data_cache) if etoro_module._instrument_data_cache else 0,
+        "cached_data_for_these_ids": {str(iid): cached_data.get(iid) for iid in instrument_ids},
+        "pnl_trace_first_non_gbp": pnl_trace,
+    }
+
+
 @router.get("/etoro-name-lookup")
 def etoro_name_lookup():
     """Show first 10 entries from the cached instrument names map."""

@@ -162,6 +162,7 @@ def _fetch_instruments_by_ids(instrument_ids: list[int], headers: dict) -> dict:
         return {"name": name, "ticker": ticker}
 
     result: dict = {}
+    logging.info("etoro _fetch_instruments_by_ids: requesting %d IDs: %s", len(instrument_ids), instrument_ids)
     try:
         for i in range(0, len(instrument_ids), 50):
             batch = instrument_ids[i:i + 50]
@@ -171,13 +172,17 @@ def _fetch_instruments_by_ids(instrument_ids: list[int], headers: dict) -> dict:
                 headers=headers,
                 timeout=15,
             )
+            logging.info("etoro POST /api/v2/instruments: status=%d batch=%s", resp.status_code, batch)
             resp.raise_for_status()
             items = resp.json().get("items", [])
+            resolved_ids = [inst.get("instrumentId") or inst.get("internalInstrumentId") for inst in items]
+            logging.info("etoro POST /api/v2/instruments: returned %d items, resolved IDs=%s", len(items), resolved_ids)
             for inst in items:
                 inst_id = inst.get("instrumentId") or inst.get("internalInstrumentId")
                 if inst_id:
                     result[int(inst_id)] = _extract(inst, inst_id)
-    except Exception:
+    except Exception as e:
+        logging.info("etoro POST /api/v2/instruments FAILED: %s", e)
         return {}
     return result
 
@@ -308,6 +313,10 @@ def fetch_portfolio() -> list[dict]:
     names = {iid: all_data[iid]["name"] for iid in instrument_ids if iid in all_data}
     tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
 
+    resolved_ids = [iid for iid in instrument_ids if iid in all_data and not all_data[iid]["name"].startswith("eToro #")]
+    missing_ids = [iid for iid in instrument_ids if iid not in all_data or all_data[iid]["name"].startswith("eToro #")]
+    logging.info("etoro instruments: requested=%s resolved=%s missing=%s", list(instrument_ids), resolved_ids, missing_ids)
+
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     logging.debug("eToro fetch_portfolio: gbpusd=%.4f", float(gbpusd))
     results = []
@@ -371,6 +380,13 @@ def fetch_portfolio() -> list[dict]:
 
         display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
         ticker = tickers.get(instrument_id) or str(instrument_id)
+        name_resolved = instrument_id in names and not display_name.startswith("eToro #")
+        logging.info(
+            "etoro pos %s: currency=%s invested=%s netProfit=%s currentRate=%s name_resolved=%s calc_profit_gbp=%s",
+            instrument_id, pos_currency, float(invested), float(profit),
+            pos.get("currentRate"), name_resolved,
+            float(net_profit_gbp) if net_profit_gbp is not None else None,
+        )
 
         results.append({
             "ticker": ticker,
