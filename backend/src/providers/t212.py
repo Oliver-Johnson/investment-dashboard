@@ -143,7 +143,7 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
         if not ticker_meta:
             # T212 variant tickers: SMSNl_EQ → try SMSN_EQ (strip trailing char before _EQ)
             import re as _re
-            base = _re.sub(r'[0-9a-zA-Z](_EQ)$', r'\1', ticker)
+            base = _re.sub(r'[0-9a-z](_EQ)$', r'\1', ticker)
             if base != ticker:
                 ticker_meta = metadata.get(base, {})
         currency = ticker_meta.get("currency") or (
