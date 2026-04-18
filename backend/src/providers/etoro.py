@@ -10,6 +10,7 @@ from src.providers.yfinance_client import _get_gbpusd_rate, _get_rate_to_gbp
 # 5-minute portfolio cache to avoid slow repeated eToro API calls
 _portfolio_cache: dict = {"data": None, "expires": 0.0}
 _cash_cache: dict = {"data": None, "expires": 0.0}
+_live_pnl_cache: dict = {"data": None, "expires": 0.0}
 
 # Instrument data cache — only populated when a non-empty result is obtained,
 # so failed fetches don't permanently block retries (unlike lru_cache which caches {}).
@@ -29,6 +30,67 @@ def _auth_headers() -> dict:
         "x-api-key": ETORO_USER_KEY,
         "x-user-key": ETORO_API_KEY,
     }
+
+
+def _fetch_live_pnl() -> dict:
+    """Fetch live P&L data from eToro. Returns {positionID: {"netProfit": float, "currentRate": float, "currency": str}}.
+    Cached for 60 seconds."""
+    now = time.time()
+    if _live_pnl_cache["data"] is not None and now < _live_pnl_cache["expires"]:
+        return _live_pnl_cache["data"]
+
+    result = {}
+    endpoints = [
+        f"{ETORO_BASE_URL}/api/v1/trading/info/real/pnl",
+        f"{ETORO_BASE_URL}/api/v1/trading/info/pnl",
+    ]
+    for url in endpoints:
+        try:
+            logging.info("etoro _fetch_live_pnl: trying %s", url)
+            resp = requests.get(url, headers=_auth_headers(), timeout=15)
+            logging.info("etoro _fetch_live_pnl: %s -> %d", url, resp.status_code)
+            if resp.status_code >= 400:
+                logging.info("etoro _fetch_live_pnl: body=%s", resp.text[:500])
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            logging.info("etoro _fetch_live_pnl: response keys=%s, type=%s", list(data.keys()) if isinstance(data, dict) else "list", type(data).__name__)
+            # Handle both list and dict response formats
+            positions = data if isinstance(data, list) else data.get("positions", data.get("items", []))
+            if isinstance(positions, dict):
+                # Could be a dict keyed by positionID
+                for pid_str, pdata in positions.items():
+                    try:
+                        pid = int(pid_str)
+                    except (ValueError, TypeError):
+                        continue
+                    result[pid] = {
+                        "netProfit": pdata.get("netProfit", 0),
+                        "currentRate": pdata.get("currentRate", 0),
+                        "currency": pdata.get("currency", "USD"),
+                    }
+            elif isinstance(positions, list):
+                for pos in positions:
+                    pid = pos.get("positionID") or pos.get("positionId")
+                    if pid:
+                        result[int(pid)] = {
+                            "netProfit": pos.get("netProfit", 0),
+                            "currentRate": pos.get("currentRate", 0),
+                            "currency": pos.get("currency", "USD"),
+                        }
+            if result:
+                logging.info("etoro _fetch_live_pnl: got %d positions from %s", len(result), url)
+                break
+            else:
+                logging.info("etoro _fetch_live_pnl: parsed 0 positions from %s, sample: %s",
+                             url, str(data)[:300])
+        except Exception as e:
+            logging.info("etoro _fetch_live_pnl: %s failed: %s", url, e)
+            continue
+
+    _live_pnl_cache["data"] = result
+    _live_pnl_cache["expires"] = time.time() + 60
+    return result
 
 
 def _all_instrument_data() -> dict:
@@ -187,6 +249,94 @@ def _fetch_instruments_by_ids(instrument_ids: list[int], headers: dict) -> dict:
     return result
 
 
+def _resolve_missing_instruments(missing_ids: list[int], headers: dict) -> dict:
+    """Try multiple fallback endpoints to resolve instrument names for IDs that failed batch lookup.
+    Returns {instrument_id: {"name": str, "ticker": str|None}}."""
+    def _extract(inst: dict, fallback_id) -> dict:
+        name = (
+            inst.get("internalInstrumentDisplayName")
+            or inst.get("displayname")
+            or inst.get("displayName")
+            or inst.get("instrumentDisplayName")
+            or inst.get("name")
+            or inst.get("internalSymbolFull")
+            or inst.get("symbolFull")
+            or f"eToro #{fallback_id}"
+        )
+        raw_ticker = inst.get("internalSymbolFull") or inst.get("symbolFull") or inst.get("symbol")
+        ticker = raw_ticker.upper() if raw_ticker else None
+        return {"name": name, "ticker": ticker}
+
+    result: dict = {}
+
+    # Strategy 1: Individual GET /api/v1/market-data/instruments/{id}
+    for iid in missing_ids:
+        if iid in result:
+            continue
+        try:
+            url = f"{ETORO_BASE_URL}/api/v1/market-data/instruments/{iid}"
+            logging.info("etoro _resolve_missing: trying GET %s", url)
+            resp = requests.get(url, headers=headers, timeout=10)
+            logging.info("etoro _resolve_missing: GET instruments/%d -> %d", iid, resp.status_code)
+            if resp.status_code < 400:
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    data = data[0]
+                if isinstance(data, dict) and (data.get("instrumentId") or data.get("name") or data.get("displayName")):
+                    result[iid] = _extract(data, iid)
+                    logging.info("etoro _resolve_missing: resolved %d via individual GET: %s", iid, result[iid])
+        except Exception as e:
+            logging.info("etoro _resolve_missing: GET instruments/%d failed: %s", iid, e)
+
+    still_missing = [iid for iid in missing_ids if iid not in result]
+    if not still_missing:
+        return result
+
+    # Strategy 2: Public eToro web API
+    try:
+        ids_param = ",".join(str(i) for i in still_missing)
+        url = f"https://www.etoro.com/api/instrumentsmetadata/V1.1/instruments?instrumentIds={ids_param}"
+        logging.info("etoro _resolve_missing: trying public web API: %s", url)
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        logging.info("etoro _resolve_missing: public web API -> %d", resp.status_code)
+        if resp.status_code < 400:
+            data = resp.json()
+            items = data if isinstance(data, list) else data.get("instruments", data.get("items", []))
+            if isinstance(items, list):
+                for inst in items:
+                    inst_id = inst.get("instrumentId") or inst.get("InstrumentId")
+                    if inst_id and int(inst_id) in still_missing:
+                        result[int(inst_id)] = _extract(inst, inst_id)
+                        logging.info("etoro _resolve_missing: resolved %d via public API: %s", int(inst_id), result[int(inst_id)])
+    except Exception as e:
+        logging.info("etoro _resolve_missing: public web API failed: %s", e)
+
+    still_missing = [iid for iid in missing_ids if iid not in result]
+    if not still_missing:
+        return result
+
+    # Strategy 3: POST to api.etoro.com (different base URL from public-api.etoro.com)
+    try:
+        logging.info("etoro _resolve_missing: trying POST api.etoro.com for %s", still_missing)
+        resp = requests.post(
+            "https://api.etoro.com/api/v2/instruments",
+            json={"instrumentIds": still_missing},
+            headers=headers,
+            timeout=15,
+        )
+        logging.info("etoro _resolve_missing: POST api.etoro.com -> %d", resp.status_code)
+        if resp.status_code < 400:
+            items = resp.json().get("items", [])
+            for inst in items:
+                inst_id = inst.get("instrumentId") or inst.get("internalInstrumentId")
+                if inst_id and int(inst_id) in still_missing:
+                    result[int(inst_id)] = _extract(inst, inst_id)
+    except Exception as e:
+        logging.info("etoro _resolve_missing: POST api.etoro.com failed: %s", e)
+
+    return result
+
+
 def _all_instrument_names() -> dict:
     """Returns {instrumentId: display_name}. Delegates to _all_instrument_data cache."""
     return {k: v["name"] for k, v in _all_instrument_data().items()}
@@ -286,6 +436,34 @@ def fetch_portfolio() -> list[dict]:
     if not positions and not mirrors:
         return []
 
+    # Fetch live P&L data and merge into positions (portfolio endpoint lacks netProfit/currentRate)
+    live_pnl = _fetch_live_pnl()
+    if live_pnl:
+        logging.info("etoro: merging live P&L for %d positions", len(live_pnl))
+        for pos in positions:
+            pid = pos.get("positionID") or pos.get("positionId")
+            if pid and int(pid) in live_pnl:
+                pnl = live_pnl[int(pid)]
+                if pnl.get("netProfit") is not None and "netProfit" not in pos:
+                    pos["netProfit"] = pnl["netProfit"]
+                if pnl.get("currentRate") and not pos.get("currentRate"):
+                    pos["currentRate"] = pnl["currentRate"]
+                if pnl.get("currency") and not pos.get("currency"):
+                    pos["currency"] = pnl["currency"]
+        for mirror in mirrors:
+            for pos in mirror.get("positions", []):
+                pid = pos.get("positionID") or pos.get("positionId")
+                if pid and int(pid) in live_pnl:
+                    pnl = live_pnl[int(pid)]
+                    if pnl.get("netProfit") is not None and "netProfit" not in pos:
+                        pos["netProfit"] = pnl["netProfit"]
+                    if pnl.get("currentRate") and not pos.get("currentRate"):
+                        pos["currentRate"] = pnl["currentRate"]
+                    if pnl.get("currency") and not pos.get("currency"):
+                        pos["currency"] = pnl["currency"]
+    else:
+        logging.info("etoro: no live P&L data available, using portfolio data as-is")
+
     # Collect ALL instrument IDs (direct + mirror positions) before fetching names.
     # Normalise to int to avoid str/int key mismatches between API responses.
     all_instrument_ids = {int(pos["instrumentID"]) for pos in positions if pos.get("instrumentID")}
@@ -316,6 +494,18 @@ def fetch_portfolio() -> list[dict]:
     resolved_ids = [iid for iid in instrument_ids if iid in all_data and not all_data[iid]["name"].startswith("eToro #")]
     missing_ids = [iid for iid in instrument_ids if iid not in all_data or all_data[iid]["name"].startswith("eToro #")]
     logging.info("etoro instruments: requested=%s resolved=%s missing=%s", list(instrument_ids), resolved_ids, missing_ids)
+
+    # Try fallback resolution for any missing instruments
+    if missing_ids:
+        fallback_data = _resolve_missing_instruments(missing_ids, inst_headers)
+        if fallback_data:
+            logging.info("etoro: fallback resolved %d/%d missing instruments", len(fallback_data), len(missing_ids))
+            all_data.update(fallback_data)
+            with _instrument_data_lock:
+                _instrument_data_cache.update(fallback_data)
+            # Rebuild names/tickers with newly resolved data
+            names = {iid: all_data[iid]["name"] for iid in instrument_ids if iid in all_data}
+            tickers = {iid: all_data[iid]["ticker"] for iid in instrument_ids if iid in all_data and all_data[iid].get("ticker")}
 
     gbpusd = Decimal(str(_get_gbpusd_rate()))
     logging.debug("eToro fetch_portfolio: gbpusd=%.4f", float(gbpusd))
