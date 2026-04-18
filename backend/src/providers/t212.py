@@ -178,7 +178,7 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
 
 def fetch_pies(account: str = "isa") -> dict:
     """Fetch T212 pies and return {ticker: {pieId, pieName}} map. Cached 5 min.
-    Returns stale data (or {}) on API failure so callers degrade gracefully."""
+    Uses only the single GET /equity/pies list request — no per-pie detail calls."""
     cache = _pies_cache[account]
     now = time.time()
     if cache["data"] is not None and now < cache["expires"]:
@@ -200,54 +200,19 @@ def fetch_pies(account: str = "isa") -> dict:
 
     for pie in pies:
         pie_id = pie.get("id")
-        time.sleep(1)  # Avoid T212 rate limiting (429) between pie detail requests
-
-        detail = None
-        for attempt in range(2):
-            try:
-                detail_resp = requests.get(
-                    f"{creds['base_url']}/equity/pies/{pie_id}",
-                    headers=headers,
-                    timeout=15,
-                )
-                if detail_resp.status_code == 429:
-                    if attempt == 0:
-                        logging.warning("T212 pie %s: 429 rate limited, retrying after 2s", pie_id)
-                        time.sleep(2)
-                        continue
-                    else:
-                        logging.warning("T212 pie %s: 429 on retry, using instrumentShares fallback", pie_id)
-                        break
-                detail_resp.raise_for_status()
-                detail = detail_resp.json()
-                break
-            except requests.RequestException as e:
-                logging.warning("T212 pie %s: request failed (%s), using instrumentShares fallback", pie_id, e)
-                break
-
-        # Prefer name from detail endpoint (has settings.name); fall back to list-level fields
         pie_name = (
-            ((detail.get("settings") or {}).get("name") if detail else None)
-            or (pie.get("settings") or {}).get("name")
+            (pie.get("settings") or {}).get("name")
             or pie.get("name")
             or f"Pie {pie_id}"
         )
 
-        instruments = (detail.get("instruments") or []) if detail else []
-
-        # Instruments is normally a list of objects with a "ticker" key.
-        # For copied/imported pies T212 sometimes returns an empty instruments list
-        # but the list-level "instrumentShares" dict (ticker -> share%) is populated.
-        if instruments:
-            for inst in instruments:
-                ticker = inst.get("ticker") or ""
+        instrument_shares = pie.get("instrumentShares") or {}
+        if instrument_shares:
+            for ticker in instrument_shares:
                 if ticker:
                     ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
         else:
-            # Fall back to instrumentShares from the list-level pie object
-            for ticker in (pie.get("instrumentShares") or {}):
-                if ticker:
-                    ticker_map[ticker] = {"pieId": pie_id, "pieName": pie_name}
+            logging.warning("T212 pie %s: no instrumentShares in list response", pie_id)
 
     cache["data"] = ticker_map
     cache["expires"] = now + 300

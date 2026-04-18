@@ -236,6 +236,9 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                         <>
                           {pies.map(pie => {
                             const pieTotal = pie.holdings.reduce((s, h) => s + (h.value_gbp ?? 0), 0);
+                            const pieGainLoss = pie.holdings.some(h => h.gain_loss_gbp != null)
+                              ? pie.holdings.reduce((s, h) => s + (h.gain_loss_gbp ?? 0), 0)
+                              : null;
                             const isOpen = expandedPies.has(pie.id);
                             return (
                               <React.Fragment key={`pie-${pie.id}`}>
@@ -243,17 +246,27 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                                   className="cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 transition-colors"
                                   onClick={() => togglePie(pie.id)}
                                 >
-                                  <td colSpan="6" className="py-2 pl-3 pr-3">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        {isOpen ? <ChevronUp size={11} className="text-slate-500" /> : <ChevronDown size={11} className="text-slate-500" />}
-                                        <PieChart size={11} className="text-slate-500" />
-                                        <span className="text-xs font-semibold text-slate-200">{pie.name}</span>
-                                        <span className="text-xs text-slate-500">{pie.holdings.length} holding{pie.holdings.length !== 1 ? 's' : ''}</span>
-                                      </div>
-                                      <span className="font-mono text-xs font-semibold text-slate-300">{formatGBP(pieTotal)}</span>
+                                  <td colSpan="3" className="py-2 pl-3 pr-4">
+                                    <div className="flex items-center gap-2">
+                                      {isOpen ? <ChevronUp size={11} className="text-slate-500" /> : <ChevronDown size={11} className="text-slate-500" />}
+                                      <PieChart size={11} className="text-slate-500" />
+                                      <span className="text-xs font-semibold text-slate-200">{pie.name}</span>
+                                      <span className="text-xs text-slate-500">{pie.holdings.length} holding{pie.holdings.length !== 1 ? 's' : ''}</span>
                                     </div>
                                   </td>
+                                  <td className="py-2 pl-4 pr-3 text-right">
+                                    <span className="font-mono text-xs font-semibold text-slate-200">{formatGBP(pieTotal)}</span>
+                                  </td>
+                                  <td className="py-2 px-4 text-right hidden md:table-cell">
+                                    {pieGainLoss != null ? (
+                                      <div className={`font-mono text-xs ${pieGainLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {pieGainLoss >= 0 ? '+' : ''}{formatGBP(pieGainLoss)}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-700 text-xs">—</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 pr-3 w-16" />
                                 </tr>
                                 {isOpen && sortHoldings(pie.holdings).map(holding => (
                                   <HoldingRow

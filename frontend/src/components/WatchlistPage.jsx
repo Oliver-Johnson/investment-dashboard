@@ -192,7 +192,6 @@ export default function WatchlistPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-800">
-                    <th className="text-left py-3 px-4 font-medium text-slate-500">Ticker</th>
                     <th className="text-left py-3 px-4 font-medium text-slate-500">Name</th>
                     <th className="text-right py-3 px-4 font-medium text-slate-500">Current Price</th>
                     <th className="text-right py-3 px-4 font-medium text-slate-500">Target Price</th>
@@ -209,10 +208,16 @@ export default function WatchlistPage() {
                     return (
                       <tr key={item.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                         <td
-                          className="py-3 px-4 font-semibold text-slate-100 cursor-pointer hover:text-blue-400 transition-colors"
+                          className="py-3 px-4 cursor-pointer"
                           onClick={() => setHistoryItem(item)}
-                        >{item.ticker}</td>
-                        <td className="py-3 px-4 text-slate-400">{item.display_name || '—'}</td>
+                        >
+                          <div className="font-semibold text-slate-100 hover:text-blue-400 transition-colors">
+                            {item.display_name || item.ticker}
+                          </div>
+                          {item.display_name && item.display_name !== item.ticker && (
+                            <div className="text-slate-500 font-mono">{item.ticker}</div>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-right text-slate-200">
                           {item.current_price_gbp != null ? formatGBP(item.current_price_gbp) : (
                             <span className="text-slate-600">N/A</span>
