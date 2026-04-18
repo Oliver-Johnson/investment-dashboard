@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 import time
 import requests
@@ -199,27 +200,40 @@ def fetch_pies(account: str = "isa") -> dict:
 
     for pie in pies:
         pie_id = pie.get("id")
+        time.sleep(1)  # Avoid T212 rate limiting (429) between pie detail requests
 
-        try:
-            detail_resp = requests.get(
-                f"{creds['base_url']}/equity/pies/{pie_id}",
-                headers=headers,
-                timeout=15,
-            )
-            detail_resp.raise_for_status()
-            detail = detail_resp.json()
-        except requests.RequestException:
-            continue
+        detail = None
+        for attempt in range(2):
+            try:
+                detail_resp = requests.get(
+                    f"{creds['base_url']}/equity/pies/{pie_id}",
+                    headers=headers,
+                    timeout=15,
+                )
+                if detail_resp.status_code == 429:
+                    if attempt == 0:
+                        logging.warning("T212 pie %s: 429 rate limited, retrying after 2s", pie_id)
+                        time.sleep(2)
+                        continue
+                    else:
+                        logging.warning("T212 pie %s: 429 on retry, using instrumentShares fallback", pie_id)
+                        break
+                detail_resp.raise_for_status()
+                detail = detail_resp.json()
+                break
+            except requests.RequestException as e:
+                logging.warning("T212 pie %s: request failed (%s), using instrumentShares fallback", pie_id, e)
+                break
 
         # Prefer name from detail endpoint (has settings.name); fall back to list-level fields
         pie_name = (
-            (detail.get("settings") or {}).get("name")
+            ((detail.get("settings") or {}).get("name") if detail else None)
             or (pie.get("settings") or {}).get("name")
             or pie.get("name")
             or f"Pie {pie_id}"
         )
 
-        instruments = detail.get("instruments") or []
+        instruments = (detail.get("instruments") or []) if detail else []
 
         # Instruments is normally a list of objects with a "ticker" key.
         # For copied/imported pies T212 sometimes returns an empty instruments list
