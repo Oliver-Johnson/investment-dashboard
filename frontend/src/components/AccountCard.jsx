@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Building2, ChevronDown, ChevronUp, Trash2, Loader2, Pencil, PieChart } from 'lucide-react';
+import { Building2, ChevronDown, ChevronUp, Trash2, Loader2, Pencil, PieChart, Maximize2 } from 'lucide-react';
 import HoldingRow, { formatGBP } from './HoldingRow';
 import FreshnessIndicator from './FreshnessIndicator';
 import EditHoldingModal from './EditHoldingModal';
 import HoldingHistoryModal from './HoldingHistoryModal';
 import EditAccountModal from './EditAccountModal';
+import AccountExpandModal from './AccountExpandModal';
 import { apiFetch } from '../config/api';
 
 export default function AccountCard({ account, onDataChanged, onAddHolding, portfolioTotal }) {
@@ -14,6 +15,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
   const [expanded, setExpanded] = useState(true);
   const [expandedPies, setExpandedPies] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [expanded_modal, setExpandedModal] = useState(false);
   const [editingCash, setEditingCash] = useState(false);
   const [cashInput, setCashInput] = useState('');
 
@@ -138,6 +140,13 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                   {account.holdings?.length ?? 0} holding{account.holdings?.length !== 1 ? 's' : ''}
                 </div>
               </div>
+              <button
+                onClick={() => setExpandedModal(true)}
+                className="p-1.5 rounded hover:bg-slate-700 text-slate-600 hover:text-slate-300 transition-colors"
+                title="Expand account"
+              >
+                <Maximize2 size={13} />
+              </button>
               <button
                 onClick={handleDeleteAccount}
                 disabled={deleting}
@@ -361,6 +370,15 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
           account={account}
           onClose={() => setEditingAccount(false)}
           onSaved={() => { setEditingAccount(false); onDataChanged(); }}
+        />
+      )}
+
+      {expanded_modal && (
+        <AccountExpandModal
+          account={account}
+          onClose={() => setExpandedModal(false)}
+          onDataChanged={onDataChanged}
+          portfolioTotal={portfolioTotal}
         />
       )}
     </>
