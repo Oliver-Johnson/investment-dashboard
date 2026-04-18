@@ -46,15 +46,15 @@ def _fetch_live_pnl() -> dict:
     ]
     for url in endpoints:
         try:
-            logging.info("etoro _fetch_live_pnl: trying %s", url)
+            logging.warning("etoro _fetch_live_pnl: trying %s", url)
             resp = requests.get(url, headers=_auth_headers(), timeout=15)
-            logging.info("etoro _fetch_live_pnl: %s -> %d", url, resp.status_code)
+            logging.warning("etoro _fetch_live_pnl: %s -> %d", url, resp.status_code)
             if resp.status_code >= 400:
-                logging.info("etoro _fetch_live_pnl: body=%s", resp.text[:500])
+                logging.warning("etoro _fetch_live_pnl: body=%s", resp.text[:500])
                 continue
             resp.raise_for_status()
             data = resp.json()
-            logging.info("etoro _fetch_live_pnl: response keys=%s, type=%s", list(data.keys()) if isinstance(data, dict) else "list", type(data).__name__)
+            logging.warning("etoro _fetch_live_pnl: response keys=%s, type=%s", list(data.keys()) if isinstance(data, dict) else "list", type(data).__name__)
             # Handle both list and dict response formats
             positions = data if isinstance(data, list) else data.get("positions", data.get("items", []))
             if isinstance(positions, dict):
@@ -79,13 +79,13 @@ def _fetch_live_pnl() -> dict:
                             "currency": pos.get("currency", "USD"),
                         }
             if result:
-                logging.info("etoro _fetch_live_pnl: got %d positions from %s", len(result), url)
+                logging.warning("etoro _fetch_live_pnl: got %d positions from %s", len(result), url)
                 break
             else:
-                logging.info("etoro _fetch_live_pnl: parsed 0 positions from %s, sample: %s",
+                logging.warning("etoro _fetch_live_pnl: parsed 0 positions from %s, sample: %s",
                              url, str(data)[:300])
         except Exception as e:
-            logging.info("etoro _fetch_live_pnl: %s failed: %s", url, e)
+            logging.warning("etoro _fetch_live_pnl: %s failed: %s", url, e)
             continue
 
     _live_pnl_cache["data"] = result
@@ -224,7 +224,7 @@ def _fetch_instruments_by_ids(instrument_ids: list[int], headers: dict) -> dict:
         return {"name": name, "ticker": ticker}
 
     result: dict = {}
-    logging.info("etoro _fetch_instruments_by_ids: requesting %d IDs: %s", len(instrument_ids), instrument_ids)
+    logging.warning("etoro _fetch_instruments_by_ids: requesting %d IDs: %s", len(instrument_ids), instrument_ids)
     try:
         for i in range(0, len(instrument_ids), 50):
             batch = instrument_ids[i:i + 50]
@@ -234,17 +234,17 @@ def _fetch_instruments_by_ids(instrument_ids: list[int], headers: dict) -> dict:
                 headers=headers,
                 timeout=15,
             )
-            logging.info("etoro POST /api/v2/instruments: status=%d batch=%s", resp.status_code, batch)
+            logging.warning("etoro POST /api/v2/instruments: status=%d batch=%s", resp.status_code, batch)
             resp.raise_for_status()
             items = resp.json().get("items", [])
             resolved_ids = [inst.get("instrumentId") or inst.get("internalInstrumentId") for inst in items]
-            logging.info("etoro POST /api/v2/instruments: returned %d items, resolved IDs=%s", len(items), resolved_ids)
+            logging.warning("etoro POST /api/v2/instruments: returned %d items, resolved IDs=%s", len(items), resolved_ids)
             for inst in items:
                 inst_id = inst.get("instrumentId") or inst.get("internalInstrumentId")
                 if inst_id:
                     result[int(inst_id)] = _extract(inst, inst_id)
     except Exception as e:
-        logging.info("etoro POST /api/v2/instruments FAILED: %s", e)
+        logging.warning("etoro POST /api/v2/instruments FAILED: %s", e)
         return {}
     return result
 
@@ -275,18 +275,18 @@ def _resolve_missing_instruments(missing_ids: list[int], headers: dict) -> dict:
             continue
         try:
             url = f"{ETORO_BASE_URL}/api/v1/market-data/instruments/{iid}"
-            logging.info("etoro _resolve_missing: trying GET %s", url)
+            logging.warning("etoro _resolve_missing: trying GET %s", url)
             resp = requests.get(url, headers=headers, timeout=10)
-            logging.info("etoro _resolve_missing: GET instruments/%d -> %d", iid, resp.status_code)
+            logging.warning("etoro _resolve_missing: GET instruments/%d -> %d", iid, resp.status_code)
             if resp.status_code < 400:
                 data = resp.json()
                 if isinstance(data, list) and data:
                     data = data[0]
                 if isinstance(data, dict) and (data.get("instrumentId") or data.get("name") or data.get("displayName")):
                     result[iid] = _extract(data, iid)
-                    logging.info("etoro _resolve_missing: resolved %d via individual GET: %s", iid, result[iid])
+                    logging.warning("etoro _resolve_missing: resolved %d via individual GET: %s", iid, result[iid])
         except Exception as e:
-            logging.info("etoro _resolve_missing: GET instruments/%d failed: %s", iid, e)
+            logging.warning("etoro _resolve_missing: GET instruments/%d failed: %s", iid, e)
 
     still_missing = [iid for iid in missing_ids if iid not in result]
     if not still_missing:
@@ -296,9 +296,9 @@ def _resolve_missing_instruments(missing_ids: list[int], headers: dict) -> dict:
     try:
         ids_param = ",".join(str(i) for i in still_missing)
         url = f"https://www.etoro.com/api/instrumentsmetadata/V1.1/instruments?instrumentIds={ids_param}"
-        logging.info("etoro _resolve_missing: trying public web API: %s", url)
+        logging.warning("etoro _resolve_missing: trying public web API: %s", url)
         resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-        logging.info("etoro _resolve_missing: public web API -> %d", resp.status_code)
+        logging.warning("etoro _resolve_missing: public web API -> %d", resp.status_code)
         if resp.status_code < 400:
             data = resp.json()
             items = data if isinstance(data, list) else data.get("instruments", data.get("items", []))
@@ -307,9 +307,9 @@ def _resolve_missing_instruments(missing_ids: list[int], headers: dict) -> dict:
                     inst_id = inst.get("instrumentId") or inst.get("InstrumentId")
                     if inst_id and int(inst_id) in still_missing:
                         result[int(inst_id)] = _extract(inst, inst_id)
-                        logging.info("etoro _resolve_missing: resolved %d via public API: %s", int(inst_id), result[int(inst_id)])
+                        logging.warning("etoro _resolve_missing: resolved %d via public API: %s", int(inst_id), result[int(inst_id)])
     except Exception as e:
-        logging.info("etoro _resolve_missing: public web API failed: %s", e)
+        logging.warning("etoro _resolve_missing: public web API failed: %s", e)
 
     still_missing = [iid for iid in missing_ids if iid not in result]
     if not still_missing:
@@ -317,14 +317,14 @@ def _resolve_missing_instruments(missing_ids: list[int], headers: dict) -> dict:
 
     # Strategy 3: POST to api.etoro.com (different base URL from public-api.etoro.com)
     try:
-        logging.info("etoro _resolve_missing: trying POST api.etoro.com for %s", still_missing)
+        logging.warning("etoro _resolve_missing: trying POST api.etoro.com for %s", still_missing)
         resp = requests.post(
             "https://api.etoro.com/api/v2/instruments",
             json={"instrumentIds": still_missing},
             headers=headers,
             timeout=15,
         )
-        logging.info("etoro _resolve_missing: POST api.etoro.com -> %d", resp.status_code)
+        logging.warning("etoro _resolve_missing: POST api.etoro.com -> %d", resp.status_code)
         if resp.status_code < 400:
             items = resp.json().get("items", [])
             for inst in items:
@@ -332,7 +332,7 @@ def _resolve_missing_instruments(missing_ids: list[int], headers: dict) -> dict:
                 if inst_id and int(inst_id) in still_missing:
                     result[int(inst_id)] = _extract(inst, inst_id)
     except Exception as e:
-        logging.info("etoro _resolve_missing: POST api.etoro.com failed: %s", e)
+        logging.warning("etoro _resolve_missing: POST api.etoro.com failed: %s", e)
 
     return result
 
@@ -493,7 +493,7 @@ def fetch_portfolio() -> list[dict]:
 
     resolved_ids = [iid for iid in instrument_ids if iid in all_data and not all_data[iid]["name"].startswith("eToro #")]
     missing_ids = [iid for iid in instrument_ids if iid not in all_data or all_data[iid]["name"].startswith("eToro #")]
-    logging.info("etoro instruments: requested=%s resolved=%s missing=%s", list(instrument_ids), resolved_ids, missing_ids)
+    logging.warning("etoro instruments: requested=%s resolved=%s missing=%s", list(instrument_ids), resolved_ids, missing_ids)
 
     # Try fallback resolution for any missing instruments
     if missing_ids:
