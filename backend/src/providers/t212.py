@@ -140,13 +140,17 @@ def fetch_portfolio(account: str = "isa") -> list[dict]:
         # Use instrument metadata for currency; fall back to ticker heuristic
         ticker_meta = metadata.get(ticker, {})
         if not ticker_meta:
-            # T212 variant tickers: SMSNl_EQ → try SMSN_EQ (strip char before _EQ)
+            # T212 variant tickers: SMSNl_EQ → try SMSN_EQ (strip trailing char before _EQ)
             import re as _re
-            base = _re.sub(r'[0-9a-z](_EQ)$', r'\1', ticker)
+            base = _re.sub(r'[0-9a-zA-Z](_EQ)$', r'\1', ticker)
             if base != ticker:
                 ticker_meta = metadata.get(base, {})
-        currency = ticker_meta.get("currency") or ("USD" if "_US_" in ticker else "GBP")
-        display_name = ticker_meta.get("name", "")
+        currency = ticker_meta.get("currency") or (
+            "USD" if "_US_" in ticker
+            else "GBX" if "GBX" in ticker.upper()
+            else "GBP"
+        )
+        display_name = ticker_meta.get("name") or ticker
 
         current_price_gbp = _price_to_gbp(current_price, currency, gbpusd_ref)
         avg_price_gbp = _price_to_gbp(avg_price, currency, gbpusd_ref)
@@ -195,7 +199,6 @@ def fetch_pies(account: str = "isa") -> dict:
 
     for pie in pies:
         pie_id = pie.get("id")
-        pie_name = (pie.get("settings") or {}).get("name") or pie.get("name") or f"Pie {pie_id}"
 
         try:
             detail_resp = requests.get(
@@ -207,6 +210,14 @@ def fetch_pies(account: str = "isa") -> dict:
             detail = detail_resp.json()
         except requests.RequestException:
             continue
+
+        # Prefer name from detail endpoint (has settings.name); fall back to list-level fields
+        pie_name = (
+            (detail.get("settings") or {}).get("name")
+            or (pie.get("settings") or {}).get("name")
+            or pie.get("name")
+            or f"Pie {pie_id}"
+        )
 
         for inst in detail.get("instruments", []):
             ticker = inst.get("ticker") or (inst.get("result") or {}).get("ticker") or ""
