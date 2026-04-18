@@ -143,9 +143,10 @@ def _fetch_all_instrument_data() -> dict:
     """Internal: perform the actual API calls. Called by _all_instrument_data()."""
     def _extract(inst: dict, fallback_id) -> dict:
         name = (
-            inst.get("displayname")
-            or inst.get("internalInstrumentDisplayName")
+            inst.get("instrumentDisplayName")    # official API field (capital N)
             or inst.get("displayName")
+            or inst.get("displayname")
+            or inst.get("internalInstrumentDisplayName")
             or inst.get("internalSymbolFull")
             or f"eToro #{fallback_id}"
         )
@@ -165,9 +166,11 @@ def _fetch_all_instrument_data() -> dict:
         instruments = data.get("instrumentDisplayDatas", data if isinstance(data, list) else [])
         if instruments:
             result = {
-                int(inst["instrumentId"]): _extract(inst, inst["instrumentId"])
+                int(iid): _extract(inst, iid)
                 for inst in instruments
-                if inst.get("instrumentId")
+                # official API uses instrumentID (capital D); accept both casings
+                for iid in [inst.get("instrumentID") or inst.get("instrumentId")]
+                if iid
             }
             if result:
                 return result
