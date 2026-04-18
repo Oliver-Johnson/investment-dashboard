@@ -264,6 +264,7 @@ export default function AccountCard({ account, onDataChanged, onAddHolding, port
                                     onDeleted={onDataChanged}
                                     onShowHistory={setHistoryHolding}
                                     indent
+                                    isPieHolding
                                   />
                                 ))}
                               </React.Fragment>

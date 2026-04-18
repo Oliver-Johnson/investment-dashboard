@@ -19,7 +19,7 @@ function formatNumber(n, decimals = 4) {
   });
 }
 
-export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onShowHistory, indent = false }) {
+export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onShowHistory, indent = false, isPieHolding = false }) {
   const [deleting, setDeleting] = useState(false);
   const price = holding.price_gbp ?? holding.current_price ?? 0;
   const value = holding.value_gbp ?? ((holding.unit_count ?? 0) * price);
@@ -38,7 +38,7 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onSho
   }
 
   return (
-    <tr className="group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+    <tr className={`group border-t border-slate-800/60 hover:bg-slate-800/30 transition-colors${isPieHolding ? ' bg-indigo-950/20' : ''}`}>
       <td className={`py-2.5 pr-4 ${indent ? 'pl-7' : 'pl-3'}`}>
         <button
           onClick={() => onShowHistory && onShowHistory(holding)}
@@ -47,6 +47,11 @@ export default function HoldingRow({ holding, isManual, onEdit, onDeleted, onSho
         >
           <span className="text-xs font-semibold text-slate-200 leading-tight block truncate max-w-[120px] sm:max-w-none group-hover/name:text-blue-400 transition-colors">
             {holding.display_name || holding.name || holding.ticker}
+            {isPieHolding && holding.pie?.name && (
+              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-300 align-middle">
+                {holding.pie.name}
+              </span>
+            )}
           </span>
           <div className="text-xs text-slate-500 font-mono hidden sm:block">{holding.ticker}</div>
         </button>
