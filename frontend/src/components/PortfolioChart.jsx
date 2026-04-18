@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import { Camera, RefreshCw } from 'lucide-react';
 import { apiFetch } from '../config/api';
 
@@ -21,7 +21,7 @@ const TIME_RANGES = [
   { key: 3650, label: 'All' },
 ];
 
-export default function PortfolioChart({ accounts }) {
+export default function PortfolioChart({ accounts, onSnapshotClick }) {
   const [days, setDays] = useState(90);
   const [mode, setMode] = useState('total'); // 'total' | 'accounts'
   const [totalData, setTotalData] = useState([]);
@@ -29,6 +29,7 @@ export default function PortfolioChart({ accounts }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activePoint, setActivePoint] = useState(null);
+  const [pinnedPoint, setPinnedPoint] = useState(null);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -50,8 +51,13 @@ export default function PortfolioChart({ accounts }) {
 
   useEffect(() => { fetchData(false); }, [fetchData]);
 
-  // Reset scrub position when range or mode changes
-  useEffect(() => { setActivePoint(null); }, [days, mode]);
+  // Reset scrub position when range or mode changes; also clear any pinned snapshot
+  useEffect(() => {
+    setActivePoint(null);
+    setPinnedPoint(null);
+    onSnapshotClick?.(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, mode]);
 
   // Poll every 60s so UI reflects snapshots without a manual refresh
   useEffect(() => {
@@ -88,8 +94,9 @@ export default function PortfolioChart({ accounts }) {
   const accountNames = [...new Set((accounts ?? []).map(a => a.name))];
   const accountColours = Object.fromEntries((accounts ?? []).map(a => [a.name, a.colour || '#6366f1']));
 
-  // Derive display point: hover/touch state, or last data point
+  // Derive display point: pinned > hover > last data point
   const displayPoint = (() => {
+    if (pinnedPoint) return pinnedPoint;
     if (activePoint) return activePoint;
     if (!chartData.length) return null;
     const last = chartData[chartData.length - 1];
@@ -114,6 +121,25 @@ export default function PortfolioChart({ accounts }) {
   };
 
   const handleMouseLeave = () => setActivePoint(null);
+
+  const handleClick = (data) => {
+    if (!data?.activePayload?.length) return;
+    const newLabel = data.activeLabel;
+    if (pinnedPoint?.label === newLabel) {
+      // Toggle off
+      setPinnedPoint(null);
+      onSnapshotClick?.(null);
+      return;
+    }
+    const newPin = { label: newLabel, payload: data.activePayload };
+    setPinnedPoint(newPin);
+    if (onSnapshotClick) {
+      const total = mode === 'total'
+        ? (data.activePayload.find(p => p.dataKey === 'Total')?.value ?? data.activePayload[0]?.value)
+        : data.activePayload.reduce((s, p) => s + (p.value || 0), 0);
+      onSnapshotClick({ date: newLabel, total });
+    }
+  };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
@@ -199,6 +225,15 @@ export default function PortfolioChart({ accounts }) {
           {displayPoint && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 px-1 min-h-[1.5rem]">
               <span className="text-xs text-slate-400 font-medium tabular-nums">{formatDate(displayPoint.label)}</span>
+              {pinnedPoint && (
+                <button
+                  onClick={() => { setPinnedPoint(null); onSnapshotClick?.(null); }}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  title="Clear pinned snapshot"
+                >
+                  · pinned ×
+                </button>
+              )}
               {displayPoint.payload.map((p, i) => (
                 <span key={i} className="flex items-center gap-1.5 text-xs">
                   <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ background: p.color }} />
@@ -223,6 +258,8 @@ export default function PortfolioChart({ accounts }) {
               margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
+              onClick={handleClick}
+              style={{ cursor: 'crosshair' }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis
@@ -240,6 +277,15 @@ export default function PortfolioChart({ accounts }) {
                 tickLine={false}
                 width={60}
               />
+              {pinnedPoint && (
+                <ReferenceLine
+                  x={pinnedPoint.label}
+                  stroke="#6366f1"
+                  strokeDasharray="4 3"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.7}
+                />
+              )}
               {mode === 'total' ? (
                 <Line
                   type="monotone"

@@ -24,7 +24,7 @@ const WRAPPER_GROUPS = [
   { label: 'Taxable', subtypes: ['gia'], colour: 'text-amber-400' },
 ];
 
-export default function TotalValuePanel({ accounts, total }) {
+export default function TotalValuePanel({ accounts, total, selectedSnapshot }) {
   const [contribSummary, setContribSummary] = useState(null);
 
   useEffect(() => {
@@ -33,6 +33,8 @@ export default function TotalValuePanel({ accounts, total }) {
       .then(d => { if (d) setContribSummary(d); })
       .catch(() => {});
   }, []);
+
+  const displayTotal = selectedSnapshot?.total ?? total ?? 0;
 
   const accountCount = accounts?.length ?? 0;
   const holdingCount = accounts?.reduce((s, a) => s + (a.holdings?.length ?? 0), 0) ?? 0;
@@ -105,13 +107,18 @@ export default function TotalValuePanel({ accounts, total }) {
               <PoundSterling size={13} className="text-emerald-400" />
             </div>
             <span className="text-xs text-slate-500 font-medium uppercase tracking-widest">Total Portfolio Value</span>
+            {selectedSnapshot && (
+              <span className="ml-2 text-xs text-indigo-400 font-normal normal-case tracking-normal">
+                {selectedSnapshot.date}
+              </span>
+            )}
           </div>
 
           <div className="text-4xl md:text-5xl font-bold text-slate-50 tracking-tight leading-none mb-1 font-mono">
-            {formatGBPShort(total ?? 0)}
+            {formatGBPShort(displayTotal)}
           </div>
           <div className="text-sm text-slate-500 font-mono mt-2">
-            {formatGBP(total ?? 0)}
+            {formatGBP(displayTotal)}
           </div>
 
           {cashTotal > 0 && (

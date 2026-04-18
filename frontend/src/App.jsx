@@ -60,6 +60,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [addHoldingAccount, setAddHoldingAccount] = useState(null);
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null);
 
   const fetchData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setIsRefreshing(true);
@@ -132,8 +133,8 @@ export default function App() {
         ) : (
           !error && (
             <>
-              <TotalValuePanel accounts={accounts} total={computedTotal} />
-              <PortfolioChart accounts={accounts} />
+              <TotalValuePanel accounts={accounts} total={computedTotal} selectedSnapshot={selectedSnapshot} />
+              <PortfolioChart accounts={accounts} onSnapshotClick={setSelectedSnapshot} />
             </>
           )
         )}
