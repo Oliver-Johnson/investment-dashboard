@@ -86,12 +86,15 @@ def _fetch_live_pnl() -> dict:
             for pos in (positions if isinstance(positions, list) else []):
                 unrealized = pos.get("unrealizedPnL", {})
                 pnl_entry = {
-                    "netProfit": unrealized.get("pnL", pos.get("netProfit", 0)),
+                    # pnL is in account currency (USD) when present — preferred for GBP conversion
+                    "netProfit": unrealized.get("pnL"),
+                    # pnlAssetCurrency is P&L in the instrument's native currency
+                    # used when pnL (USD) is absent, with assetCurrencyId for proper conversion
                     "netProfitNative": unrealized.get("pnlAssetCurrency"),
+                    "assetCurrencyId": unrealized.get("assetCurrencyId"),
                     "currentRate": unrealized.get("closeRate", pos.get("currentRate", 0)),
                     "currentValueUSD": unrealized.get("exposureInAccountCurrency"),
                     "investedUSD": unrealized.get("marginInAccountCurrency"),
-                    "assetCurrencyId": unrealized.get("assetCurrencyId"),
                 }
                 pid = pos.get("positionID") or pos.get("positionId")
                 iid = pos.get("instrumentID") or pos.get("instrumentId")
@@ -638,7 +641,14 @@ def fetch_portfolio() -> list[dict]:
                 avg_price_gbp = open_rate * to_gbp
 
         if live and live.get("netProfit") is not None:
+            # pnL is in USD (account currency) — straightforward conversion
             net_profit_gbp = Decimal(str(live["netProfit"])) * usd_to_gbp
+        elif live and live.get("netProfitNative") is not None:
+            # pnlAssetCurrency is in the instrument's native currency — use proper rate
+            native_pnl = Decimal(str(live["netProfitNative"]))
+            native_currency = live.get("assetCurrencyId") or pos_currency
+            native_to_gbp = _pos_to_gbp(native_currency) if isinstance(native_currency, str) else usd_to_gbp
+            net_profit_gbp = native_pnl * native_to_gbp
         else:
             net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
 
@@ -714,6 +724,11 @@ def fetch_portfolio() -> list[dict]:
 
             if live and live.get("netProfit") is not None:
                 net_profit_gbp = Decimal(str(live["netProfit"])) * usd_to_gbp
+            elif live and live.get("netProfitNative") is not None:
+                native_pnl = Decimal(str(live["netProfitNative"]))
+                native_currency = live.get("assetCurrencyId") or pos_currency
+                native_to_gbp = _pos_to_gbp(native_currency) if isinstance(native_currency, str) else usd_to_gbp
+                net_profit_gbp = native_pnl * native_to_gbp
             else:
                 net_profit_gbp = (profit * to_gbp) if raw_profit is not None else None
             display_name = names.get(instrument_id) or f"eToro #{instrument_id}"
