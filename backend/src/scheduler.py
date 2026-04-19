@@ -92,8 +92,8 @@ def _run_snapshot():
             record_err("etoro", str(e))
             logger.warning("eToro fetch failed during snapshot: %s", e)
 
-        # Guard: wait for warmup (up to 60s)
-        still_loading = _wait_for_warmup(timeout=60, poll_interval=2)
+        # Guard: wait for warmup (up to 120s — eToro instrument resolution can be slow)
+        still_loading = _wait_for_warmup(timeout=120, poll_interval=2)
         if still_loading:
             logger.warning("SKIP snapshot: accounts still loading after 60s: %s", still_loading)
             return
