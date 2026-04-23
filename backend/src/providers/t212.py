@@ -1,4 +1,3 @@
-import base64
 import logging
 import os
 import time
@@ -35,8 +34,7 @@ _pies_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": N
 
 def _auth_header(account: str = "isa") -> dict:
     creds = _CREDS[account]
-    token = base64.b64encode(f"{creds['api_key']}:{creds['api_secret']}".encode()).decode()
-    return {"Authorization": f"Basic {token}"}
+    return {"Authorization": creds["api_key"]}
 
 
 def _instrument_metadata(account: str = "isa") -> dict:
@@ -101,6 +99,11 @@ def fetch_portfolio_cached(account: str = "isa") -> list[dict] | None:
 def _do_fetch_portfolio(account: str = "isa"):
     try:
         fetch_portfolio(account)
+    except Exception as e:
+        logging.error("T212 portfolio fetch failed for %s: %s", account, e)
+        # Cache empty list for 60s so we don't spin a new thread on every poll
+        _portfolio_cache[account]["data"] = []
+        _portfolio_cache[account]["expires"] = time.time() + 60
     finally:
         _portfolio_cache[account]["fetching"] = False
 
