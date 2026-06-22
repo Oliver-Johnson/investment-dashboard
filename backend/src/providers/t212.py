@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import time
@@ -34,7 +35,8 @@ _pies_cache: dict = {"isa": {"data": None, "expires": 0.0}, "invest": {"data": N
 
 def _auth_header(account: str = "isa") -> dict:
     creds = _CREDS[account]
-    return {"Authorization": creds["api_key"]}
+    token = base64.b64encode(f"{creds['api_key']}:{creds['api_secret']}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
 
 def _instrument_metadata(account: str = "isa") -> dict:
