@@ -85,15 +85,15 @@ def _price_to_gbp(price: Decimal, currency: str, gbpusd_ref: list) -> Decimal:
 
 
 def fetch_portfolio_cached(account: str = "isa") -> list[dict] | None:
-    """Return cached portfolio data without blocking. Returns None if not ready yet."""
+    """Return cached portfolio data without blocking. Returns None on first load (triggers spinner).
+    After an error, returns stale [] and triggers a background retry once the 60s error TTL expires."""
     cache = _portfolio_cache[account]
-    if cache["data"] is not None:
-        return cache["data"]
-    if not cache.get("fetching"):
+    now = time.time()
+    if not cache.get("fetching") and (cache["data"] is None or now >= cache.get("expires", 0)):
         cache["fetching"] = True
         import threading
         threading.Thread(target=_do_fetch_portfolio, args=(account,), daemon=True).start()
-    return None
+    return cache["data"]
 
 
 def _do_fetch_portfolio(account: str = "isa"):
