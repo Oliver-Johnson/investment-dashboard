@@ -36,6 +36,7 @@ class HoldingCreate(BaseModel):
     notes: Optional[str] = None
     manual_price_gbp: Optional[float] = None
     avg_cost_gbp: Optional[float] = None
+    tags: List[str] = []
 
 
 class HoldingUpdate(BaseModel):
@@ -44,6 +45,13 @@ class HoldingUpdate(BaseModel):
     notes: Optional[str] = None
     manual_price_gbp: Optional[float] = None
     avg_cost_gbp: Optional[float] = None
+    tags: Optional[List[str]] = None
+
+
+class HoldingTagsUpdate(BaseModel):
+    account_id: int
+    ticker: str
+    tags: List[str] = []
 
 
 class HoldingWithPrice(BaseModel):
@@ -62,6 +70,7 @@ class HoldingWithPrice(BaseModel):
     last_holding_update: datetime
     freshness: str  # green/amber/red
     pie: Optional[dict] = None  # {"id": int, "name": str} for T212 pie holdings
+    tags: List[str] = []  # e.g. ["SEIS", "EIS"] or custom labels
 
 
 class AccountSummary(BaseModel):

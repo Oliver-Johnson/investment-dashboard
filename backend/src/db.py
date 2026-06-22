@@ -58,6 +58,7 @@ def init_schema():
                 );
                 ALTER TABLE holdings ADD COLUMN IF NOT EXISTS manual_price_gbp NUMERIC(20, 6);
                 ALTER TABLE holdings ADD COLUMN IF NOT EXISTS avg_cost_gbp NUMERIC(20, 6);
+                ALTER TABLE holdings ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 
                 CREATE TABLE IF NOT EXISTS price_cache (
                     ticker VARCHAR(20) PRIMARY KEY,

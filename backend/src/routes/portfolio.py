@@ -66,6 +66,7 @@ def holding_with_price_from_row(row: dict) -> HoldingWithPrice:
         gain_loss_pct=gain_loss_pct,
         last_holding_update=row["last_holding_update"],
         freshness=freshness,
+        tags=row.get("tags") or [],
     )
 
 
@@ -90,6 +91,13 @@ def portfolio_summary():
                     (account_id,),
                 )
                 db_holdings = [dict(r) for r in cur.fetchall()]
+
+                # Tags are keyed by (account_id, ticker) in the DB so they can be
+                # attached to live T212/eToro positions (which have no DB id).
+                db_tags = {
+                    str(r["ticker"]).lower(): (r.get("tags") or [])
+                    for r in db_holdings
+                }
 
                 holdings_out: list[HoldingWithPrice] = []
 
@@ -129,11 +137,13 @@ def portfolio_summary():
                             last_holding_update=now,
                             freshness="green",
                             pie=pos.get("pie"),
+                            tags=db_tags.get(str(pos["ticker"]).lower(), []),
                         ))
 
-                    # Also include any DB holdings not covered by T212 (manual additions)
+                    # Also include any DB holdings not covered by T212 (manual additions).
+                    # Skip zero-unit rows: these are tag-only placeholders for live positions.
                     for row in db_holdings:
-                        if row["ticker"] not in t212_tickers:
+                        if row["ticker"] not in t212_tickers and float(row["unit_count"]) > 0:
                             holdings_out.append(holding_with_price_from_row(row))
 
                     # Append cash balance as a pseudo-holding
@@ -186,11 +196,13 @@ def portfolio_summary():
                             gain_loss_pct=gain_loss_pct,
                             last_holding_update=now,
                             freshness="green",
+                            tags=db_tags.get(str(pos["ticker"]).lower(), []),
                         ))
 
-                    # Also include any DB holdings not covered by eToro (manual additions)
+                    # Also include any DB holdings not covered by eToro (manual additions).
+                    # Skip zero-unit rows: these are tag-only placeholders for live positions.
                     for row in db_holdings:
-                        if row["ticker"] not in etoro_tickers:
+                        if row["ticker"] not in etoro_tickers and float(row["unit_count"]) > 0:
                             holdings_out.append(holding_with_price_from_row(row))
 
                     # Append cash balance as a pseudo-holding

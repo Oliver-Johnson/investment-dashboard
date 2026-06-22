@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from src.db import get_db
-from src.models import HoldingCreate, HoldingUpdate
+from src.models import HoldingCreate, HoldingUpdate, HoldingTagsUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/holdings", tags=["holdings"])
@@ -50,8 +50,8 @@ def create_holding(body: HoldingCreate, background_tasks: BackgroundTasks):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO holdings (account_id, ticker, display_name, unit_count, currency, notes, manual_price_gbp, avg_cost_gbp)
-                   VALUES (%(account_id)s, %(ticker)s, %(display_name)s, %(unit_count)s, %(currency)s, %(notes)s, %(manual_price_gbp)s, %(avg_cost_gbp)s)
+                """INSERT INTO holdings (account_id, ticker, display_name, unit_count, currency, notes, manual_price_gbp, avg_cost_gbp, tags)
+                   VALUES (%(account_id)s, %(ticker)s, %(display_name)s, %(unit_count)s, %(currency)s, %(notes)s, %(manual_price_gbp)s, %(avg_cost_gbp)s, %(tags)s)
                    ON CONFLICT (account_id, lower(ticker)) DO UPDATE SET
                        unit_count = EXCLUDED.unit_count,
                        display_name = EXCLUDED.display_name,
@@ -70,6 +70,26 @@ def create_holding(body: HoldingCreate, background_tasks: BackgroundTasks):
     return row
 
 
+@router.put("/tags")
+def set_holding_tags(body: HoldingTagsUpdate):
+    """Set tags for a holding keyed by (account_id, ticker).
+
+    Works for both manual holdings and live T212/eToro positions (which have
+    no stable DB id). Upserts a holdings row to hold the tags if none exists.
+    """
+    ticker = body.ticker.lower()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO holdings (account_id, ticker, tags)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (account_id, lower(ticker)) DO UPDATE SET tags = EXCLUDED.tags
+                   RETURNING *""",
+                (body.account_id, ticker, body.tags),
+            )
+            return cur.fetchone()
+
+
 @router.put("/{holding_id}")
 def update_holding(holding_id: int, body: HoldingUpdate):
     with get_db() as conn:
@@ -81,6 +101,7 @@ def update_holding(holding_id: int, body: HoldingUpdate):
                        notes = COALESCE(%(notes)s, notes),
                        manual_price_gbp = %(manual_price_gbp)s,
                        avg_cost_gbp = %(avg_cost_gbp)s,
+                       tags = COALESCE(%(tags)s, tags),
                        last_holding_update = NOW()
                    WHERE id = %(id)s
                    RETURNING *""",
